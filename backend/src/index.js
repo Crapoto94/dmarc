@@ -12,6 +12,7 @@ import alertsRouter from './routes/alerts.js';
 import configRouter from './routes/config.js';
 import statsRouter from './routes/stats.js';
 import authRouter from './routes/auth.js';
+import infraRouter from './routes/infra.js';
 import { authenticate } from './middleware.js';
 
 import { readdirSync, existsSync, mkdirSync } from 'fs';
@@ -47,10 +48,7 @@ app.use('/api/domains', authenticate, domainsRouter);
 app.use('/api/alerts', authenticate, alertsRouter);
 app.use('/api/config', authenticate, configRouter);
 app.use('/api/stats', authenticate, statsRouter);
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
-});
+app.use('/api/infra', authenticate, infraRouter);
 
 async function main() {
   await initDB();
