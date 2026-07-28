@@ -39,6 +39,9 @@ export const api = {
   getUnauthorized: () => fetchJSON('/stats/unauthorized'),
   getEmailDetails: () => fetchJSON('/stats/email-details'),
   getRecommendations: () => fetchJSON('/stats/recommendations'),
+  getMonthlyComparison: () => fetchJSON('/stats/monthly'),
+  getNewSenders: () => fetchJSON('/stats/new-senders'),
+  getOverview: () => fetchJSON('/stats/overview'),
   lookupIP: (ip) => fetchJSON(`/stats/ip-lookup?ip=${encodeURIComponent(ip)}`),
 
   getReports: () => fetchJSON('/reports'),

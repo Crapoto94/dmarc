@@ -3,6 +3,7 @@ import {
   getGlobalStats, getTimeline, getTopSources,
   getDispositionBreakdown, getUnauthorizedActivity,
   getEmailDetails, generateRecommendations,
+  getMonthlyComparison, getNewSenders, getOverview,
 } from '../services/analyzer.js';
 import { lookupIP } from '../services/ipinfo.js';
 
@@ -36,6 +37,19 @@ router.get('/dispositions', (req, res) => {
 
 router.get('/unauthorized', (req, res) => {
   res.json(getUnauthorizedActivity());
+});
+
+router.get('/monthly', (req, res) => {
+  res.json(getMonthlyComparison());
+});
+
+router.get('/new-senders', (req, res) => {
+  const days = parseInt(req.query.days) || 90;
+  res.json(getNewSenders(days));
+});
+
+router.get('/overview', (req, res) => {
+  res.json(getOverview());
 });
 
 router.get('/ip-lookup', async (req, res) => {

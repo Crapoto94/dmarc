@@ -295,3 +295,51 @@ export function generateRecommendations() {
 export function getImportLog(limit = 50) {
   return all('SELECT * FROM import_log ORDER BY created_at DESC LIMIT ?', [limit]);
 }
+
+export function getMonthlyComparison() {
+  return all(`
+    SELECT
+      strftime('%Y-%m', datetime(rp.begin_ts, 'unixepoch')) as month,
+      COALESCE(SUM(r.count), 0) as total,
+      COALESCE(SUM(CASE WHEN r.dkim_eval = 'pass' AND r.spf_eval = 'pass' THEN r.count ELSE 0 END), 0) as pass,
+      COALESCE(SUM(CASE WHEN r.dkim_eval != 'pass' OR r.spf_eval != 'pass' THEN r.count ELSE 0 END), 0) as fail
+    FROM records r
+    JOIN reports rp ON r.report_id = rp.id
+    GROUP BY month
+    ORDER BY month ASC
+  `);
+}
+
+export function getNewSenders(days = 90) {
+  const since = Math.floor(Date.now() / 1000) - days * 86400;
+  const firstSeen = Math.floor(Date.now() / 1000) - 7 * 86400;
+
+  const allSenders = all(`
+    SELECT source_ip, header_from, MIN(rp.begin_ts) as first_seen,
+      COALESCE(SUM(r.count), 0) as total,
+      COALESCE(SUM(CASE WHEN r.dkim_eval = 'pass' AND r.spf_eval = 'pass' THEN r.count ELSE 0 END), 0) as pass
+    FROM records r
+    JOIN reports rp ON r.report_id = rp.id
+    WHERE rp.begin_ts >= ?
+    GROUP BY source_ip, header_from
+    HAVING first_seen >= ?
+    ORDER BY total DESC
+  `, [since, firstSeen]);
+
+  return allSenders;
+}
+
+export function getOverview() {
+  const stats = getGlobalStats();
+  const monthly = getMonthlyComparison();
+  const newSenders = getNewSenders();
+  const topDomains = all(`
+    SELECT header_from, SUM(count) as total,
+      SUM(CASE WHEN dkim_eval = 'pass' AND spf_eval = 'pass' THEN count ELSE 0 END) as pass
+    FROM records
+    GROUP BY header_from
+    ORDER BY total DESC
+    LIMIT 15
+  `);
+  return { stats, monthly, newSenders, topDomains };
+}
