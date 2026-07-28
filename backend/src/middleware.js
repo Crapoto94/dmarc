@@ -7,14 +7,13 @@ function getSecret() {
 }
 
 export function authenticate(req, res, next) {
-  const auth = req.headers.authorization;
-  if (!auth) return res.status(401).json({ error: 'Authentification requise' });
+  const token = req.cookies?.dmarc_token || req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Authentification requise' });
   try {
-    const decoded = jwt.verify(auth.replace('Bearer ', ''), getSecret());
-    req.user = decoded;
+    req.user = jwt.verify(token, getSecret());
     next();
   } catch {
-    res.status(401).json({ error: 'Token invalide' });
+    res.status(401).json({ error: 'Session expirée' });
   }
 }
 

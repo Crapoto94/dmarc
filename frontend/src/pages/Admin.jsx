@@ -35,7 +35,7 @@ export default function Admin({ user }) {
     setTestResult(null);
     try {
       const res = await fetch('/api/config/test-imap', { method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('dmarc_token')}`, 'Content-Type': 'application/json' } });
+        credentials: 'include', headers: { 'Content-Type': 'application/json' } });
       const data = await res.json();
       setTestResult({ type: data.success ? 'success' : 'error', msg: data.message || data.error });
     } catch (err) {
@@ -49,7 +49,7 @@ export default function Admin({ user }) {
     setTestResult(null);
     try {
       const res = await fetch('/api/config/fetch-now', { method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('dmarc_token')}`, 'Content-Type': 'application/json' } });
+        credentials: 'include', headers: { 'Content-Type': 'application/json' } });
       const data = await res.json();
       setTestResult({ type: data.success ? 'success' : 'error', msg: data.success ? `✅ ${data.message}` : data.error });
     } catch (err) {
