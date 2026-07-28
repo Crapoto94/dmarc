@@ -21,6 +21,9 @@ export default function App() {
   const [page, setPage] = useState('dashboard');
   const [alertCount, setAlertCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [dark, setDark] = useState(() => localStorage.getItem('dmarc-dark') === 'true');
+
+  useEffect(() => { document.documentElement.classList.toggle('dark', dark); localStorage.setItem('dmarc-dark', dark); }, [dark]);
 
   useEffect(() => {
     api.getMe().then(u => {
@@ -61,6 +64,7 @@ export default function App() {
           </button>
         ))}
         <div style={s.spacer} />
+        <button onClick={() => setDark(d => !d)} style={s.navBtn} title={dark ? 'Mode clair' : 'Mode sombre'}>{dark ? '☀️' : '🌙'}</button>
         <div style={{ fontSize: '0.6rem', color: '#888', textAlign: 'center', marginBottom: '4px' }}>
           {user?.role === 'admin' ? 'Admin' : 'View'}
         </div>
@@ -78,7 +82,7 @@ export default function App() {
 }
 
 const s = {
-  layout: { display: 'flex', minHeight: '100vh', background: '#f0f2f5', fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif" },
+  layout: { display: 'flex', minHeight: '100vh', background: 'var(--bg)', fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif" },
   sidebar: { width: '72px', background: '#1a1a2e', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', gap: '8px', boxShadow: '2px 0 12px rgba(0,0,0,0.1)' },
   logo: { color: '#e94560', fontWeight: 800, fontSize: '0.75rem', letterSpacing: '2px', marginBottom: '24px', writingMode: 'vertical-lr', textOrientation: 'mixed' },
   navBtn: { width: '48px', height: '48px', border: 'none', borderRadius: '12px', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', transition: 'all 0.2s', color: '#fff' },

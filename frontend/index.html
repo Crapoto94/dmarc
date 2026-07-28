@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DMARC Analyzer</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🛡️</text></svg>" />
+    <style>
+      :root { --bg: #f0f2f5; --card-bg: #fff; --text: #333; --text-secondary: #666; --border: #e0e0e0; --shadow: rgba(0,0,0,0.08); }
+      .dark { --bg: #1a1a2e; --card-bg: #16213e; --text: #e0e0e0; --text-secondary: #aaa; --border: #2a2a4a; --shadow: rgba(0,0,0,0.3); }
+      body { margin: 0; background: var(--bg); color: var(--text); transition: background 0.3s, color 0.3s; }
+      * { box-sizing: border-box; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
