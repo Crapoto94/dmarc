@@ -180,7 +180,6 @@ const s = {
   pageBtn: {
     padding: '4px 12px', border: '1px solid var(--border)', borderRadius: '6px',
     background: 'var(--card-bg)', color: 'var(--text)', cursor: 'pointer',
-    opacity: (d) => d ? 0.4 : 1,
   },
   loading: { textAlign: 'center', padding: '60px', color: 'var(--text-secondary)' },
   grid: { display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px' },
