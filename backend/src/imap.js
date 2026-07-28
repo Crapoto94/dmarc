@@ -7,12 +7,40 @@ import { get, run } from './db.js';
 
 const reportsDir = join(import.meta.dirname, '..', 'reports');
 
+function buildSearchQuery(config) {
+  const query = { seen: false };
+  const custom = [];
+
+  if (config.last_fetch_date) {
+    query.since = new Date(config.last_fetch_date);
+  } else {
+    query.since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  }
+
+  if (config.gmail_search) {
+    custom.push(config.gmail_search);
+  }
+
+  if (config.gmail_senders) {
+    const senders = config.gmail_senders.split(',').map(s => s.trim()).filter(Boolean);
+    for (const s of senders) {
+      custom.push(`from:${s}`);
+    }
+  }
+
+  if (custom.length > 0) {
+    query.custom = custom.join(' ');
+  }
+
+  return query;
+}
+
 export async function fetchReportsFromGmail(_db, config) {
   const user = config.gmail_user;
   const pass = config.gmail_pass;
 
   if (!user || !pass) {
-    console.log('  [!] Gmail non configuré (gmail_user / gmail_pass)');
+    console.log('  [!] Gmail non configuré');
     return [];
   }
 
@@ -36,19 +64,14 @@ export async function fetchReportsFromGmail(_db, config) {
 
     const lock = await client.getMailboxLock('INBOX');
     try {
-      const sinceStr = config.last_fetch_date;
-      const since = sinceStr
-        ? new Date(sinceStr)
-        : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const searchQuery = buildSearchQuery(config);
+      console.log(`  [*] Recherche: ${JSON.stringify(searchQuery)}`);
 
       const messages = [];
-      for await (const msg of client.fetch(
-        { since, seen: false },
-        { envelope: true, source: true, uid: true, flags: true }
-      )) {
+      for await (const msg of client.fetch(searchQuery, { envelope: true, source: true, uid: true, flags: true })) {
         messages.push(msg);
       }
-      console.log(`  [*] ${messages.length} messages non lus trouvés dans INBOX`);
+      console.log(`  [*] ${messages.length} messages non lus avec rapports trouvés`);
 
       let processedCount = 0;
 
@@ -61,16 +84,17 @@ export async function fetchReportsFromGmail(_db, config) {
             const ext = extname(attachment.filename || '').toLowerCase();
             if (['.xml', '.gz', '.zip'].includes(ext)) {
               foundAttachment = true;
-              const filePath = join(reportsDir, attachment.filename);
+              const safeName = attachment.filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+              const filePath = join(reportsDir, safeName);
               writeFileSync(filePath, attachment.content);
-              console.log(`  [*] Pièce jointe trouvée: ${attachment.filename}`);
+              console.log(`  [*] Rapport trouvé: ${safeName}`);
 
-              const id = await importReportToDB(filePath, attachment.filename);
+              const id = await importReportToDB(filePath, safeName);
               if (id) {
                 imported.push(id);
                 run(
                   "INSERT INTO import_log (source, filename, report_id, status, message) VALUES (?, ?, ?, ?, ?)",
-                  ['gmail', attachment.filename, String(id), 'success', 'Importé depuis Gmail']
+                  ['gmail', safeName, String(id), 'success', `Importé depuis Gmail: ${parsed.subject || ''}`]
                 );
               }
             }
@@ -80,29 +104,23 @@ export async function fetchReportsFromGmail(_db, config) {
             processedCount++;
             try {
               await client.messageFlagsAdd({ uid: msg.uid }, ['\\Seen']);
-
               const folderPath = 'DMARC Traités';
-              try {
-                const mailboxes = await client.list();
-                const hasFolder = mailboxes.some(m => m.path === folderPath);
-                if (!hasFolder) {
-                  await client.mailboxCreate(folderPath);
-                }
-                await client.messageMove({ uid: msg.uid }, folderPath);
-                console.log(`  [→] Message déplacé vers "${folderPath}"`);
-              } catch (moveErr) {
-                console.log(`  [~] Message marqué comme lu (déplacement impossible: ${moveErr.message})`);
+              const mailboxes = await client.list();
+              if (!mailboxes.some(m => m.path === folderPath)) {
+                await client.mailboxCreate(folderPath);
               }
-            } catch (flagErr) {
-              console.log(`  [!] Impossible de marquer le message: ${flagErr.message}`);
+              await client.messageMove({ uid: msg.uid }, folderPath);
+              console.log(`  [→] Message déplacé vers "${folderPath}"`);
+            } catch (moveErr) {
+              console.log(`  [~] Marqué lu (déplacement: ${moveErr.message})`);
             }
           }
         } catch (parseErr) {
-          console.log(`  [!] Erreur parsing message: ${parseErr.message}`);
+          console.log(`  [!] Erreur parsing: ${parseErr.message}`);
         }
       }
 
-      console.log(`  [*] ${processedCount} message(s) contenant des rapports traités`);
+      console.log(`  [*] ${processedCount} rapport(s) traités`);
     } finally {
       lock.release();
     }
@@ -111,11 +129,42 @@ export async function fetchReportsFromGmail(_db, config) {
     await client.logout();
   } catch (err) {
     console.error(`  [!!] Erreur IMAP: ${err.message}`);
-    run(
-      "INSERT INTO import_log (source, filename, report_id, status, message) VALUES (?, ?, ?, ?, ?)",
-      ['gmail', '', '', 'error', `Erreur IMAP: ${err.message}`]
-    );
+    run("INSERT INTO import_log (source, filename, report_id, status, message) VALUES (?, ?, ?, ?, ?)",
+      ['gmail', '', '', 'error', `Erreur IMAP: ${err.message}`]);
   }
 
   return imported;
+}
+
+export async function markAllRead(config) {
+  const user = config.gmail_user;
+  const pass = config.gmail_pass;
+  if (!user || !pass) return { count: 0 };
+
+  const client = new ImapFlow({
+    host: 'imap.gmail.com', port: 993, secure: true,
+    auth: { user, pass }, logger: false,
+  });
+
+  let count = 0;
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      const messages = [];
+      for await (const msg of client.fetch({ seen: false }, { uid: true })) {
+        messages.push(msg);
+      }
+      for (const msg of messages) {
+        await client.messageFlagsAdd({ uid: msg.uid }, ['\\Seen']);
+        count++;
+      }
+    } finally {
+      lock.release();
+    }
+    await client.logout();
+  } catch (err) {
+    console.error(`[!!] Erreur markAllRead: ${err.message}`);
+  }
+  return { count };
 }

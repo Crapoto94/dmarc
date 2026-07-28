@@ -117,6 +117,7 @@ export default function Admin({ user }) {
               help={<span>Crée un mot de passe sur <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" style={{color:'#0f3460'}}>myaccount.google.com/apppasswords</a></span>}
             />
             <FormRow label="Filtre Gmail (optionnel)" value={config.gmail_search || ''} onChange={v => update('gmail_search', v)} placeholder="subject:DMARC" />
+            <FormRow label="Expéditeurs (virgule)" value={config.gmail_senders || ''} onChange={v => update('gmail_senders', v)} placeholder="dmarc@dmarcian.com, dmarc@google.com" help="Laisse vide pour chercher tous les expéditeurs" />
           </div>
 
           <div style={s.card}>
@@ -131,7 +132,7 @@ export default function Admin({ user }) {
             <FormRow label="Email de notification" value={config.alert_email || ''} onChange={v => update('alert_email', v)} placeholder="vous@exemple.com" />
           </div>
 
-          <div style={s.actions}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
             <button style={s.primaryBtn} onClick={save} disabled={saving}>{saving ? 'Enregistrement...' : '💾 Enregistrer'}</button>
             {config.gmail_user && config.gmail_pass && (
               <>
@@ -139,6 +140,13 @@ export default function Admin({ user }) {
                 <button style={{ ...s.secondaryBtn, background: '#27ae60' }} onClick={fetchNow} disabled={fetching}>
                   {fetching ? '⏳ Moissonnage...' : '📥 Moissonner maintenant'}
                 </button>
+                <button style={{ ...s.secondaryBtn, background: '#e67e22' }} onClick={async () => {
+                  try {
+                    const res = await api.fetch('/api/config/mark-all-read', { method: 'POST' });
+                    const data = await res.json();
+                    alert(data.success ? `${data.count} message(s) marqués lus` : 'Erreur: ' + (data.error || 'inconnue'));
+                  } catch (e) { alert('Erreur: ' + e.message); }
+                }}>📬 Tout marquer lu</button>
               </>
             )}
           </div>

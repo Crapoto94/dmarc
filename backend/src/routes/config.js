@@ -1,13 +1,18 @@
 import { Router } from 'express';
 import { get, run, all as dbAll } from '../db.js';
 import { ImapFlow } from 'imapflow';
+import { markAllRead } from '../imap.js';
 
 const router = Router();
 
+const CONFIG_KEYS = [
+  'gmail_user', 'gmail_pass', 'gmail_search', 'gmail_senders',
+  'smtp_host', 'smtp_user', 'smtp_pass', 'alert_email', 'last_fetch_date',
+];
+
 router.get('/', (req, res) => {
-  const keys = ['gmail_user', 'gmail_pass', 'gmail_search', 'smtp_host', 'smtp_user', 'smtp_pass', 'alert_email', 'last_fetch_date'];
   const config = {};
-  for (const key of keys) {
+  for (const key of CONFIG_KEYS) {
     const row = get('SELECT value FROM config WHERE key = ?', [key]);
     config[key] = row ? row.value : '';
   }
@@ -16,7 +21,7 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
   const updates = req.body;
-  const allowedKeys = ['gmail_user', 'gmail_pass', 'gmail_search', 'smtp_host', 'smtp_user', 'smtp_pass', 'alert_email'];
+  const allowedKeys = CONFIG_KEYS.filter(k => k !== 'last_fetch_date');
 
   for (const [key, value] of Object.entries(updates)) {
     if (allowedKeys.includes(key)) {
@@ -24,6 +29,16 @@ router.post('/', (req, res) => {
     }
   }
   res.json({ success: true });
+});
+
+router.post('/mark-all-read', async (req, res) => {
+  const user = get("SELECT value FROM config WHERE key = 'gmail_user'");
+  const pass = get("SELECT value FROM config WHERE key = 'gmail_pass'");
+  if (!user?.value || !pass?.value) {
+    return res.json({ success: false, error: 'Gmail non configuré' });
+  }
+  const result = await markAllRead({ gmail_user: user.value, gmail_pass: pass.value });
+  res.json({ success: true, count: result.count });
 });
 
 router.post('/test-imap', async (req, res) => {
