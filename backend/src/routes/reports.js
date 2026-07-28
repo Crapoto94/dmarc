@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { all, get, run } from '../db.js';
 import { importReportToDB } from '../parser.js';
 import { generateAlerts } from '../services/analyzer.js';
+import { lookupIP } from '../services/ipinfo.js';
 import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 
@@ -32,6 +33,13 @@ router.get('/:id', (req, res) => {
   for (const rec of records) {
     rec.dkim_results = all('SELECT * FROM dkim_results WHERE record_id = ?', [rec.id]);
     rec.spf_results = all('SELECT * FROM spf_results WHERE record_id = ?', [rec.id]);
+    const ipInfo = get('SELECT * FROM ip_cache WHERE ip = ?', [rec.source_ip]);
+    if (ipInfo) {
+      rec.ip_org = ipInfo.org;
+      rec.ip_country = ipInfo.country;
+      rec.ip_isp = ipInfo.isp;
+      rec.ip_asn = ipInfo.asn;
+    }
   }
 
   res.json({ ...report, records });

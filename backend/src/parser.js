@@ -4,6 +4,7 @@ import { PassThrough } from 'stream';
 import AdmZip from 'adm-zip';
 import { parseStringPromise } from 'xml2js';
 import { run, get, transaction } from './db.js';
+import { lookupIP } from './services/ipinfo.js';
 
 export async function parseDMARCReport(filePath) {
   const data = await readFileContent(filePath);
@@ -208,10 +209,14 @@ export async function importReportToDB(filePath, filename) {
           run('INSERT INTO spf_results (record_id, domain, scope, result) VALUES (?, ?, ?, ?)',
             [recordId, s.domain, s.scope, s.result]);
         }
+
+        try { lookupIP(rec.source_ip); } catch {}
       }
     });
 
     console.log(`  [+] Importé: ${filename} (${report.records.length} enregistrements)`);
+    run("INSERT INTO import_log (source, filename, report_id, status, message) VALUES (?, ?, ?, ?, ?)",
+      ['file', filename, String(reportId), 'success', `${report.records.length} enregistrements`]);
     return reportId;
   } catch (err) {
     console.error(`  [!!] Erreur import ${filename}: ${err.message}`);

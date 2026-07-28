@@ -100,12 +100,51 @@ export async function initDB() {
       value TEXT
     )
   `);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'viewer',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS ip_cache (
+      ip TEXT PRIMARY KEY,
+      org TEXT,
+      country TEXT,
+      isp TEXT,
+      asn TEXT,
+      looked_up_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS import_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source TEXT,
+      filename TEXT,
+      report_id TEXT,
+      status TEXT,
+      message TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
   const count = db.exec("SELECT COUNT(*) as c FROM domains");
   const row = count.length > 0 ? count[0].values[0] : [0];
   if (row[0] === 0) {
     db.run("INSERT OR IGNORE INTO domains (domain) VALUES ('fbc.fr')");
     db.run("INSERT OR IGNORE INTO domains (domain) VALUES ('partyplay.fr')");
+  }
+
+  const userCount = db.exec("SELECT COUNT(*) as c FROM users");
+  const urow = userCount.length > 0 ? userCount[0].values[0] : [0];
+  if (urow[0] === 0) {
+    const bcrypt = await import('bcryptjs');
+    const hash = bcrypt.hashSync('admin', 10);
+    db.run("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", ['admin', hash, 'admin']);
+    console.log('  [*] Utilisateur admin créé par défaut (admin/admin)');
   }
 
   saveDB();

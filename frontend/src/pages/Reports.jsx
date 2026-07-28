@@ -87,13 +87,16 @@ export default function Reports() {
                 <table style={s.table}>
                   <thead>
                     <tr>
-                      <th>IP Source</th><th>Count</th><th>Header From</th><th>DKIM</th><th>SPF</th><th>Disposition</th>
+                      <th>IP Source</th><th>Titulaire</th><th>Count</th><th>Header From</th><th>DKIM</th><th>SPF</th><th>Disposition</th>
                     </tr>
                   </thead>
                   <tbody>
                     {detail.records?.map((rec, i) => (
                       <tr key={i} style={{ background: i % 2 === 0 ? '#f9f9f9' : '#fff' }}>
                         <td style={s.td}>{rec.source_ip}</td>
+                        <td style={{ ...s.td, fontSize: '0.75rem', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rec.ip_org || ''}>
+                          {rec.ip_org || rec.ip_isp || '...'}
+                        </td>
                         <td style={s.td}>{rec.count}</td>
                         <td style={s.td}>{rec.header_from}</td>
                         <td style={{ ...s.td, color: rec.dkim_eval === 'pass' ? '#27ae60' : '#c0392b' }}>{rec.dkim_eval}</td>

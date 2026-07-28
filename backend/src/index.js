@@ -9,6 +9,8 @@ import domainsRouter from './routes/domains.js';
 import alertsRouter from './routes/alerts.js';
 import configRouter from './routes/config.js';
 import statsRouter from './routes/stats.js';
+import authRouter from './routes/auth.js';
+import { authenticate } from './middleware.js';
 
 import { readdirSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
@@ -21,11 +23,13 @@ const PORT = process.env.PORT || 3201;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-app.use('/api/reports', reportsRouter);
-app.use('/api/domains', domainsRouter);
-app.use('/api/alerts', alertsRouter);
-app.use('/api/config', configRouter);
-app.use('/api/stats', statsRouter);
+app.use('/api/auth', authRouter);
+
+app.use('/api/reports', authenticate, reportsRouter);
+app.use('/api/domains', authenticate, domainsRouter);
+app.use('/api/alerts', authenticate, alertsRouter);
+app.use('/api/config', authenticate, configRouter);
+app.use('/api/stats', authenticate, statsRouter);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

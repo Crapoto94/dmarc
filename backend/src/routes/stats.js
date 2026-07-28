@@ -2,13 +2,22 @@ import { Router } from 'express';
 import {
   getGlobalStats, getTimeline, getTopSources,
   getDispositionBreakdown, getUnauthorizedActivity,
-  getServiceIdentification
+  getEmailDetails, generateRecommendations,
 } from '../services/analyzer.js';
+import { lookupIP } from '../services/ipinfo.js';
 
 const router = Router();
 
 router.get('/global', (req, res) => {
   res.json(getGlobalStats());
+});
+
+router.get('/email-details', (req, res) => {
+  res.json(getEmailDetails());
+});
+
+router.get('/recommendations', (req, res) => {
+  res.json(generateRecommendations());
 });
 
 router.get('/timeline', (req, res) => {
@@ -29,8 +38,11 @@ router.get('/unauthorized', (req, res) => {
   res.json(getUnauthorizedActivity());
 });
 
-router.get('/services', (req, res) => {
-  res.json(getServiceIdentification());
+router.get('/ip-lookup', async (req, res) => {
+  const { ip } = req.query;
+  if (!ip) return res.status(400).json({ error: 'ip required' });
+  const info = await lookupIP(ip);
+  res.json(info);
 });
 
 export default router;

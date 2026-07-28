@@ -1,10 +1,21 @@
 const BASE = '/api';
 
+function getToken() {
+  return localStorage.getItem('dmarc_token');
+}
+
 async function fetchJSON(url, opts = {}) {
-  const res = await fetch(BASE + url, {
-    headers: { 'Content-Type': 'application/json', ...opts.headers },
-    ...opts,
-  });
+  const headers = { 'Content-Type': 'application/json' };
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(BASE + url, { headers, ...opts });
+  if (res.status === 401) {
+    localStorage.removeItem('dmarc_token');
+    localStorage.removeItem('dmarc_user');
+    window.location.href = '/';
+    throw new Error('Session expirée');
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || res.statusText);
@@ -13,13 +24,36 @@ async function fetchJSON(url, opts = {}) {
 }
 
 export const api = {
+  // Auth
+  login: (username, password) => fetchJSON('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  }),
+  getMe: () => fetchJSON('/auth/me'),
+  changePassword: (oldPassword, newPassword) => fetchJSON('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ oldPassword, newPassword }),
+  }),
+  getUsers: () => fetchJSON('/auth/users'),
+  createUser: (username, password, role) => fetchJSON('/auth/users', {
+    method: 'POST',
+    body: JSON.stringify({ username, password, role }),
+  }),
+  updateUser: (id, data) => fetchJSON(`/auth/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  deleteUser: (id) => fetchJSON(`/auth/users/${id}`, { method: 'DELETE' }),
+
   // Stats
   getGlobalStats: () => fetchJSON('/stats/global'),
   getTimeline: (days = 90) => fetchJSON(`/stats/timeline?days=${days}`),
   getTopSources: (limit = 20) => fetchJSON(`/stats/sources?limit=${limit}`),
   getDispositions: () => fetchJSON('/stats/dispositions'),
   getUnauthorized: () => fetchJSON('/stats/unauthorized'),
-  getServices: () => fetchJSON('/stats/services'),
+  getEmailDetails: () => fetchJSON('/stats/email-details'),
+  getRecommendations: () => fetchJSON('/stats/recommendations'),
+  lookupIP: (ip) => fetchJSON(`/stats/ip-lookup?ip=${encodeURIComponent(ip)}`),
 
   // Reports
   getReports: () => fetchJSON('/reports'),
@@ -53,4 +87,7 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(config),
   }),
+  testImap: () => fetchJSON('/config/test-imap', { method: 'POST' }),
+  fetchNow: () => fetchJSON('/config/fetch-now', { method: 'POST' }),
+  getImportLog: (limit = 50) => fetchJSON(`/config/import-log?limit=${limit}`),
 };

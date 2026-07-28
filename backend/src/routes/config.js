@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { get, run } from '../db.js';
+import { get, run, all as dbAll } from '../db.js';
 import { ImapFlow } from 'imapflow';
 
 const router = Router();
@@ -49,6 +49,12 @@ router.post('/test-imap', async (req, res) => {
   } catch (err) {
     res.json({ success: false, error: `Échec connexion IMAP: ${err.message}` });
   }
+});
+
+router.get('/import-log', (req, res) => {
+  const limit = parseInt(req.query.limit) || 50;
+  const logs = dbAll('SELECT * FROM import_log ORDER BY created_at DESC LIMIT ?', [limit]);
+  res.json(logs);
 });
 
 router.post('/fetch-now', async (req, res) => {
