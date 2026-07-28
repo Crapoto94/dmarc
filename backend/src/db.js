@@ -4,7 +4,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const dbPath = join(__dirname, '..', 'data', 'dmarc.db');
+const dbPath = process.env.DB_PATH || join(__dirname, '..', 'data', 'dmarc.db');
 
 if (!existsSync(dirname(dbPath))) {
   mkdirSync(dirname(dbPath), { recursive: true });

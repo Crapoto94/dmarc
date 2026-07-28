@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "adm-zip": "^0.5.10",
@@ -21,5 +23,8 @@
     "nodemailer": "^6.9.8",
     "sql.js": "^1.10.0",
     "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
   }
 }
