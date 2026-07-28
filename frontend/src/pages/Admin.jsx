@@ -25,6 +25,8 @@ export default function Admin() {
     setTimeout(() => setTestResult(null), 3000);
   };
 
+  const [fetching, setFetching] = useState(false);
+
   const testConnection = async () => {
     setTestResult(null);
     try {
@@ -35,6 +37,23 @@ export default function Admin() {
       setTestResult({ type: 'error', msg: err.message });
     }
     setTimeout(() => setTestResult(null), 8000);
+  };
+
+  const fetchNow = async () => {
+    setFetching(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/config/fetch-now', { method: 'POST' });
+      const data = await res.json();
+      setTestResult({
+        type: data.success ? 'success' : 'error',
+        msg: data.success ? `✅ ${data.message}` : data.error,
+      });
+    } catch (err) {
+      setTestResult({ type: 'error', msg: err.message });
+    }
+    setFetching(false);
+    setTimeout(() => setTestResult(null), 10000);
   };
 
   const togglePassword = (key) => {
@@ -148,9 +167,14 @@ export default function Admin() {
           {saving ? 'Enregistrement...' : '💾 Enregistrer la configuration'}
         </button>
         {config.gmail_user && config.gmail_pass && (
-          <button style={s.secondaryBtn} onClick={testConnection}>
-            🔍 Tester connexion IMAP
-          </button>
+          <>
+            <button style={s.secondaryBtn} onClick={testConnection}>
+              🔍 Tester connexion IMAP
+            </button>
+            <button style={{ ...s.secondaryBtn, background: '#27ae60' }} onClick={fetchNow} disabled={fetching}>
+              {fetching ? '⏳ Moissonnage...' : '📥 Moissonner maintenant'}
+            </button>
+          </>
         )}
       </div>
 

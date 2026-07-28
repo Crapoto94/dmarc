@@ -51,4 +51,39 @@ router.post('/test-imap', async (req, res) => {
   }
 });
 
+router.post('/fetch-now', async (req, res) => {
+  const user = get("SELECT value FROM config WHERE key = 'gmail_user'");
+  const pass = get("SELECT value FROM config WHERE key = 'gmail_pass'");
+
+  if (!user || !pass || !user.value || !pass.value) {
+    return res.json({ success: false, error: 'Gmail non configuré' });
+  }
+
+  try {
+    const { fetchReportsFromGmail } = await import('../imap.js');
+    const { generateAlerts } = await import('../services/analyzer.js');
+    const { sendNewAlerts } = await import('../services/notifier.js');
+
+    const config = {
+      gmail_user: user.value,
+      gmail_pass: pass.value,
+      last_fetch_date: get("SELECT value FROM config WHERE key = 'last_fetch_date'")?.value,
+      gmail_search: get("SELECT value FROM config WHERE key = 'gmail_search'")?.value,
+    };
+
+    const imported = await fetchReportsFromGmail(null, config);
+    const newAlerts = generateAlerts();
+    if (newAlerts.length > 0) sendNewAlerts();
+
+    res.json({
+      success: true,
+      imported: imported.length,
+      alerts: newAlerts.length,
+      message: `${imported.length} rapport(s) importé(s), ${newAlerts.length} alerte(s)`
+    });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 export default router;
