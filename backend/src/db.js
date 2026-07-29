@@ -4,22 +4,29 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const dbPath = process.env.DB_PATH || join(__dirname, '..', 'data', 'dmarc.db');
 
-if (!existsSync(dirname(dbPath))) {
-  mkdirSync(dirname(dbPath), { recursive: true });
-}
+// Résolu à l'appel d'initDB() (pas au chargement du module) pour que les tests
+// puissent basculer sur DB_PATH=':memory:' avant d'initialiser la base.
+let dbPath = null;
 
 let db = null;
 
 export async function initDB() {
+  dbPath = process.env.DB_PATH || join(__dirname, '..', 'data', 'dmarc.db');
   const SQL = await initSqlJs();
 
-  if (existsSync(dbPath)) {
-    const buffer = readFileSync(dbPath);
-    db = new SQL.Database(buffer);
-  } else {
+  if (dbPath === ':memory:') {
     db = new SQL.Database();
+  } else {
+    if (!existsSync(dirname(dbPath))) {
+      mkdirSync(dirname(dbPath), { recursive: true });
+    }
+    if (existsSync(dbPath)) {
+      const buffer = readFileSync(dbPath);
+      db = new SQL.Database(buffer);
+    } else {
+      db = new SQL.Database();
+    }
   }
 
   db.run('PRAGMA foreign_keys=ON');
