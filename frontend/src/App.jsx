@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Dashboard from './pages/Dashboard.jsx';
 import Domains from './pages/Domains.jsx';
+import Deliverability from './pages/Deliverability.jsx';
 import Reports from './pages/Reports.jsx';
 import Alerts from './pages/Alerts.jsx';
 import Admin from './pages/Admin.jsx';
@@ -11,6 +12,7 @@ import { api } from './api.js';
 const navItems = [
   { id: 'dashboard', label: '📊', title: 'Dashboard' },
   { id: 'domains', label: '🌐', title: 'Domaines' },
+  { id: 'deliverability', label: '📈', title: 'Délivrabilité' },
   { id: 'reports', label: '📄', title: 'Rapports' },
   { id: 'alerts', label: '🔔', title: 'Alertes' },
   { id: 'admin', label: '⚙️', title: 'Admin' },
@@ -73,6 +75,7 @@ export default function App() {
       <main style={s.main}>
         {page === 'dashboard' && <Dashboard />}
         {page === 'domains' && <Domains />}
+        {page === 'deliverability' && <Deliverability />}
         {page === 'reports' && <Reports />}
         {page === 'alerts' && <Alerts onCountChange={setAlertCount} />}
         {page === 'admin' && (user.role === 'admin' ? <Admin user={user} /> : <UserManagement user={user} />)}

@@ -6,6 +6,7 @@ import {
   getMonthlyComparison, getNewSenders, getOverview,
   getRecommendationsList, updateRecommendationStatus,
   generateAndStoreRecommendations,
+  getDeliverabilityByDomain, getDeliverabilitySources, getDeliverabilitySourceRecords,
 } from '../services/analyzer.js';
 import { lookupIP } from '../services/ipinfo.js';
 
@@ -72,6 +73,36 @@ router.get('/new-senders', (req, res) => {
 
 router.get('/overview', (req, res) => {
   res.json(getOverview());
+});
+
+router.get('/deliverability/domain', (req, res) => {
+  const { domain = '', category = 'perfect', page = 1, pageSize = 10, search = '' } = req.query;
+  res.json(getDeliverabilityByDomain({
+    domain, category, search,
+    page: parseInt(page) || 1,
+    pageSize: parseInt(pageSize) || 10,
+  }));
+});
+
+router.get('/deliverability/sources', (req, res) => {
+  const { domain = '', subdomain = '', from, to } = req.query;
+  res.json(getDeliverabilitySources({
+    domain, subdomain,
+    from: from ? Math.floor(new Date(from).getTime() / 1000) : undefined,
+    to: to ? Math.floor(new Date(to).getTime() / 1000) : undefined,
+  }));
+});
+
+router.get('/deliverability/sources/records', (req, res) => {
+  const { source, domain = '', subdomain = '', from, to, page = 1, pageSize = 20 } = req.query;
+  if (!source) return res.status(400).json({ error: 'source required' });
+  res.json(getDeliverabilitySourceRecords({
+    source, domain, subdomain,
+    from: from ? Math.floor(new Date(from).getTime() / 1000) : undefined,
+    to: to ? Math.floor(new Date(to).getTime() / 1000) : undefined,
+    page: parseInt(page) || 1,
+    pageSize: parseInt(pageSize) || 20,
+  }));
 });
 
 router.get('/ip-lookup', async (req, res) => {

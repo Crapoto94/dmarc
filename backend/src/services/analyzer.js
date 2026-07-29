@@ -366,6 +366,143 @@ export function getNewSenders(days = 90) {
   return allSenders;
 }
 
+const DELIVERABILITY_CATEGORIES = {
+  perfect: "r.dkim_eval='pass' AND r.spf_eval='pass'",
+  dkim: "r.dkim_eval='pass' AND r.spf_eval!='pass'",
+  spf: "r.dkim_eval!='pass' AND r.spf_eval='pass'",
+  nonconforme: "r.dkim_eval!='pass' AND r.spf_eval!='pass'",
+};
+
+export function getDeliverabilityByDomain({ domain = '', category = 'perfect', page = 1, pageSize = 10, search = '' } = {}) {
+  const baseParams = [];
+  let baseWhere = '1=1';
+  if (domain) {
+    baseWhere += ' AND d.domain = ?';
+    baseParams.push(domain);
+  }
+  if (search) {
+    baseWhere += ' AND (r.header_from LIKE ? OR r.source_ip LIKE ? OR rp.org_name LIKE ?)';
+    baseParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+  }
+
+  const counts = {};
+  for (const [key, cond] of Object.entries(DELIVERABILITY_CATEGORIES)) {
+    const row = get(`
+      SELECT COALESCE(SUM(r.count), 0) as total
+      FROM records r JOIN reports rp ON r.report_id = rp.id LEFT JOIN domains d ON rp.domain_id = d.id
+      WHERE ${baseWhere} AND ${cond}
+    `, baseParams);
+    counts[key] = row.total;
+  }
+
+  const activeCond = DELIVERABILITY_CATEGORIES[category] || DELIVERABILITY_CATEGORIES.perfect;
+
+  const timeline = all(`
+    SELECT strftime('%Y-%m-%d', datetime(rp.begin_ts, 'unixepoch')) as day,
+      COALESCE(SUM(r.count), 0) as total
+    FROM records r JOIN reports rp ON r.report_id = rp.id LEFT JOIN domains d ON rp.domain_id = d.id
+    WHERE ${baseWhere} AND ${activeCond}
+    GROUP BY day ORDER BY day ASC
+  `, baseParams);
+
+  const totalRow = get(`
+    SELECT COUNT(*) as c
+    FROM records r JOIN reports rp ON r.report_id = rp.id LEFT JOIN domains d ON rp.domain_id = d.id
+    WHERE ${baseWhere} AND ${activeCond}
+  `, baseParams);
+
+  const offset = (Math.max(page, 1) - 1) * pageSize;
+  const records = all(`
+    SELECT r.id, r.source_ip, r.count, r.disposition, r.dkim_eval, r.spf_eval, r.header_from, r.envelope_from,
+      rp.org_name, rp.begin_ts, rp.policy,
+      ic.org as ip_org, ic.country as ip_country, ic.isp as ip_isp, ic.asn as ip_asn
+    FROM records r
+    JOIN reports rp ON r.report_id = rp.id
+    LEFT JOIN domains d ON rp.domain_id = d.id
+    LEFT JOIN ip_cache ic ON ic.ip = r.source_ip
+    WHERE ${baseWhere} AND ${activeCond}
+    ORDER BY rp.begin_ts DESC
+    LIMIT ? OFFSET ?
+  `, [...baseParams, pageSize, offset]);
+
+  for (const rec of records) {
+    rec.dkim_results = all('SELECT domain, selector, result FROM dkim_results WHERE record_id = ?', [rec.id]);
+    rec.spf_results = all('SELECT domain, scope, result FROM spf_results WHERE record_id = ?', [rec.id]);
+  }
+
+  return { counts, timeline, records, total: totalRow.c, page, pageSize };
+}
+
+const SOURCE_EXPR = `COALESCE(
+  (SELECT dk.domain FROM dkim_results dk WHERE dk.record_id = r.id ORDER BY dk.id LIMIT 1),
+  CASE WHEN instr(r.envelope_from, '@') > 0 THEN substr(r.envelope_from, instr(r.envelope_from, '@') + 1) ELSE r.envelope_from END
+)`;
+
+export function getDeliverabilitySources({ domain = '', subdomain = '', from, to } = {}) {
+  const params = [];
+  let where = '1=1';
+  if (domain) { where += ' AND d.domain = ?'; params.push(domain); }
+  if (subdomain) { where += ' AND r.header_from = ?'; params.push(subdomain); }
+  if (from) { where += ' AND rp.begin_ts >= ?'; params.push(from); }
+  if (to) { where += ' AND rp.end_ts <= ?'; params.push(to); }
+
+  const rows = all(`
+    SELECT
+      ${SOURCE_EXPR} as source,
+      COALESCE(SUM(r.count), 0) as volume,
+      COALESCE(SUM(CASE WHEN r.dkim_eval='pass' AND r.spf_eval='pass' THEN r.count ELSE 0 END), 0) as dmarc_pass,
+      COALESCE(SUM(CASE WHEN r.dkim_eval!='pass' OR r.spf_eval!='pass' THEN r.count ELSE 0 END), 0) as dmarc_fail,
+      COALESCE(SUM(CASE WHEN r.spf_eval='pass' THEN r.count ELSE 0 END), 0) as spf_pass,
+      COALESCE(SUM(CASE WHEN r.dkim_eval='pass' THEN r.count ELSE 0 END), 0) as dkim_pass
+    FROM records r
+    JOIN reports rp ON r.report_id = rp.id
+    LEFT JOIN domains d ON rp.domain_id = d.id
+    WHERE ${where}
+    GROUP BY ${SOURCE_EXPR}
+    ORDER BY volume DESC
+  `, params);
+
+  return rows.map(r => ({
+    ...r,
+    source: r.source || 'inconnu',
+    dmarc_pct: r.volume > 0 ? Math.round((r.dmarc_pass / r.volume) * 100) : 0,
+  }));
+}
+
+export function getDeliverabilitySourceRecords({ source, domain = '', subdomain = '', from, to, page = 1, pageSize = 20 } = {}) {
+  const params = [];
+  let where = '1=1';
+  if (domain) { where += ' AND d.domain = ?'; params.push(domain); }
+  if (subdomain) { where += ' AND r.header_from = ?'; params.push(subdomain); }
+  if (from) { where += ' AND rp.begin_ts >= ?'; params.push(from); }
+  if (to) { where += ' AND rp.end_ts <= ?'; params.push(to); }
+  where += ` AND ${SOURCE_EXPR} = ?`;
+  params.push(source);
+
+  const totalRow = get(`
+    SELECT COUNT(*) as c FROM records r
+    JOIN reports rp ON r.report_id = rp.id
+    LEFT JOIN domains d ON rp.domain_id = d.id
+    WHERE ${where}
+  `, params);
+
+  const offset = (Math.max(page, 1) - 1) * pageSize;
+  const records = all(`
+    SELECT r.source_ip, r.count, r.disposition, r.dkim_eval, r.spf_eval, r.header_from, r.envelope_from,
+      rp.org_name, rp.begin_ts,
+      ic.org as ip_org, ic.country as ip_country
+    FROM records r
+    JOIN reports rp ON r.report_id = rp.id
+    LEFT JOIN domains d ON rp.domain_id = d.id
+    LEFT JOIN ip_cache ic ON ic.ip = r.source_ip
+    WHERE ${where}
+    ORDER BY rp.begin_ts DESC
+    LIMIT ? OFFSET ?
+  `, [...params, pageSize, offset]);
+
+  return { records, total: totalRow.c, page, pageSize };
+}
+
 export function getOverview() {
   const stats = getGlobalStats();
   const monthly = getMonthlyComparison();
