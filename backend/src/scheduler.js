@@ -1,33 +1,33 @@
 import cron from 'node-cron';
-import db from './db.js';
+import { get, all } from './db.js';
 import { fetchReportsFromGmail } from './imap.js';
 import { generateAlerts } from './services/analyzer.js';
-import { sendNewAlerts } from './services/notifier.js';
+import { sendBatchAlertEmail } from './services/notifier.js';
 
 export function startScheduler() {
-  console.log('  [*] Planificateur démarré - moissonnage toutes les heures');
+  const schedule = get("SELECT value FROM config WHERE key = 'cron_schedule'");
+  const expr = schedule?.value || '0 * * * *';
+  console.log(`  [*] Planificateur démarré (${expr})`);
 
-  cron.schedule('0 * * * *', async () => {
+  cron.schedule(expr, async () => {
     console.log(`\n[*] Moissonnage Gmail automatique à ${new Date().toLocaleString()}`);
     try {
-      const user = db.prepare("SELECT value FROM config WHERE key = 'gmail_user'").get();
-      const pass = db.prepare("SELECT value FROM config WHERE key = 'gmail_pass'").get();
+      const user = get("SELECT value FROM config WHERE key = 'gmail_user'");
+      const pass = get("SELECT value FROM config WHERE key = 'gmail_pass'");
 
-      if (user && pass) {
+      if (user?.value && pass?.value) {
         const config = {
           gmail_user: user.value,
           gmail_pass: pass.value,
-          last_fetch_date: db.prepare("SELECT value FROM config WHERE key = 'last_fetch_date'").get()?.value,
-          gmail_search: db.prepare("SELECT value FROM config WHERE key = 'gmail_search'").get()?.value,
+          last_fetch_date: get("SELECT value FROM config WHERE key = 'last_fetch_date'")?.value,
+          gmail_search: get("SELECT value FROM config WHERE key = 'gmail_search'")?.value,
+          gmail_senders: get("SELECT value FROM config WHERE key = 'gmail_senders'")?.value,
         };
-        await fetchReportsFromGmail(db, config);
+        await fetchReportsFromGmail(null, config);
       }
 
-      const newAlerts = generateAlerts();
-      if (newAlerts.length > 0) {
-        console.log(`  [*] ${newAlerts.length} nouvelle(s) alerte(s) générée(s)`);
-        await sendNewAlerts();
-      }
+      await generateAlerts();
+      await sendBatchAlertEmail();
     } catch (err) {
       console.error(`  [!!] Erreur scheduler: ${err.message}`);
     }

@@ -8,6 +8,7 @@ const router = Router();
 const CONFIG_KEYS = [
   'gmail_user', 'gmail_pass', 'gmail_search', 'gmail_senders',
   'smtp_host', 'smtp_user', 'smtp_pass', 'alert_email', 'last_fetch_date',
+  'cron_schedule',
 ];
 
 router.get('/', (req, res) => {
@@ -83,18 +84,19 @@ router.post('/fetch-now', async (req, res) => {
   try {
     const { fetchReportsFromGmail } = await import('../imap.js');
     const { generateAlerts } = await import('../services/analyzer.js');
-    const { sendNewAlerts } = await import('../services/notifier.js');
+    const { sendBatchAlertEmail } = await import('../services/notifier.js');
 
     const config = {
       gmail_user: user.value,
       gmail_pass: pass.value,
       last_fetch_date: get("SELECT value FROM config WHERE key = 'last_fetch_date'")?.value,
       gmail_search: get("SELECT value FROM config WHERE key = 'gmail_search'")?.value,
+      gmail_senders: get("SELECT value FROM config WHERE key = 'gmail_senders'")?.value,
     };
 
     const imported = await fetchReportsFromGmail(null, config);
     const newAlerts = generateAlerts();
-    if (newAlerts.length > 0) sendNewAlerts();
+    if (newAlerts.length > 0) await sendBatchAlertEmail();
 
     res.json({
       success: true,

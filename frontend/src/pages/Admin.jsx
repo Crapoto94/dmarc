@@ -121,6 +121,12 @@ export default function Admin({ user }) {
           </div>
 
           <div style={s.card}>
+            <div style={s.cardHeader}><span style={s.cardIcon}>⏰</span> Planification du moissonnage</div>
+            <p style={s.cardDesc}>Les imports automatiques suivent une expression cron. Par défaut : toutes les heures.</p>
+            <FormRow label="Expression cron" value={config.cron_schedule || ''} onChange={v => update('cron_schedule', v)} placeholder="0 * * * *" help={<span>Attention : le moissonnage peut déclencher des alertes. Exemples : <code>0 */2 * * *</code> (2h), <code>0 6 * * 1-5</code> (6h lun-ven)</span>} />
+          </div>
+
+          <div style={s.card}>
             <div style={s.cardHeader}><span style={s.cardIcon}>📧</span> Notifications email (SMTP)</div>
             <p style={s.cardDesc}>Reçois des alertes par email en cas d'activité suspecte.</p>
 
