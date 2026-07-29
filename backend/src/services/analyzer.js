@@ -334,11 +334,37 @@ export function getOverview() {
   const newSenders = getNewSenders();
   const topDomains = all(`
     SELECT header_from, SUM(count) as total,
-      SUM(CASE WHEN dkim_eval = 'pass' AND spf_eval = 'pass' THEN count ELSE 0 END) as pass
+      SUM(CASE WHEN dkim_eval = 'pass' AND spf_eval = 'pass' THEN count ELSE 0 END) as pass,
+      SUM(CASE WHEN dkim_eval = 'pass' AND spf_eval != 'pass' THEN count ELSE 0 END) as dkim_only,
+      SUM(CASE WHEN dkim_eval != 'pass' AND spf_eval = 'pass' THEN count ELSE 0 END) as spf_only,
+      SUM(CASE WHEN dkim_eval != 'pass' AND spf_eval != 'pass' THEN count ELSE 0 END) as both_fail
     FROM records
     GROUP BY header_from
     ORDER BY total DESC
     LIMIT 15
   `);
-  return { stats, monthly, newSenders, topDomains };
+  const authTimeline = all(`
+    SELECT
+      strftime('%Y-%m-%d', datetime(rp.begin_ts, 'unixepoch')) as day,
+      COALESCE(SUM(CASE WHEN r.dkim_eval = 'pass' THEN r.count ELSE 0 END), 0) as dkim_pass,
+      COALESCE(SUM(CASE WHEN r.spf_eval = 'pass' THEN r.count ELSE 0 END), 0) as spf_pass,
+      COALESCE(SUM(r.count), 0) as total
+    FROM records r
+    JOIN reports rp ON r.report_id = rp.id
+    GROUP BY day
+    ORDER BY day ASC
+    LIMIT 90
+  `);
+  const weeklyHeatmap = all(`
+    SELECT
+      CAST(strftime('%w', datetime(rp.begin_ts, 'unixepoch')) AS INTEGER) as dow,
+      CAST(strftime('%H', datetime(rp.begin_ts, 'unixepoch')) AS INTEGER) as hour,
+      COALESCE(SUM(r.count), 0) as total,
+      COALESCE(SUM(CASE WHEN r.dkim_eval = 'pass' AND r.spf_eval = 'pass' THEN r.count ELSE 0 END), 0) as pass
+    FROM records r
+    JOIN reports rp ON r.report_id = rp.id
+    GROUP BY dow, hour
+    ORDER BY dow, hour
+  `);
+  return { stats, monthly, newSenders, topDomains, authTimeline, weeklyHeatmap };
 }

@@ -4,6 +4,9 @@ import AuthPieChart from '../components/Charts/AuthPieChart.jsx';
 import TimelineChart from '../components/Charts/TimelineChart.jsx';
 import SourcesBarChart from '../components/Charts/SourcesBarChart.jsx';
 import DispositionChart from '../components/Charts/DispositionChart.jsx';
+import AuthTimelineChart from '../components/Charts/AuthTimelineChart.jsx';
+import WeeklyHeatmap from '../components/Charts/WeeklyHeatmap.jsx';
+import TopDomainsChart from '../components/Charts/TopDomainsChart.jsx';
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
@@ -13,6 +16,9 @@ export default function Dashboard() {
   const [unauthorized, setUnauthorized] = useState([]);
   const [emailDetails, setEmailDetails] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
+  const [authTimeline, setAuthTimeline] = useState([]);
+  const [weeklyHeatmap, setWeeklyHeatmap] = useState([]);
+  const [topDomains, setTopDomains] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -25,8 +31,9 @@ export default function Dashboard() {
       api.getUnauthorized(),
       api.getEmailDetails(),
       api.getRecommendations(),
+      api.getOverview(),
     ])
-      .then(([s, t, src, disp, unauth, ed, recs]) => {
+      .then(([s, t, src, disp, unauth, ed, recs, ov]) => {
         setStats(s);
         setTimeline(t);
         setSources(src);
@@ -34,6 +41,9 @@ export default function Dashboard() {
         setUnauthorized(unauth);
         setEmailDetails(ed);
         setRecommendations(recs);
+        setTopDomains(ov.topDomains || []);
+        setAuthTimeline(ov.authTimeline || []);
+        setWeeklyHeatmap(ov.weeklyHeatmap || []);
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
@@ -88,10 +98,32 @@ export default function Dashboard() {
         <TimelineChart data={timeline} />
       </div>
 
-      <div style={s.chartCardFull}>
-        <h3 style={s.chartTitle}>Top 10 sources IP</h3>
-        <SourcesBarChart data={sources} />
+      {authTimeline.length > 0 && (
+        <div style={s.chartCardFull}>
+          <h3 style={s.chartTitle}>Tendance DKIM / SPF</h3>
+          <AuthTimelineChart data={authTimeline} />
+        </div>
+      )}
+
+      <div style={s.chartsRow}>
+        <div style={s.chartCard}>
+          <h3 style={s.chartTitle}>Top 10 sources IP</h3>
+          <SourcesBarChart data={sources} />
+        </div>
+        {topDomains.length > 0 && (
+          <div style={s.chartCard}>
+            <h3 style={s.chartTitle}>Top domaines expéditeurs</h3>
+            <TopDomainsChart data={topDomains} />
+          </div>
+        )}
       </div>
+
+      {weeklyHeatmap.length > 0 && (
+        <div style={s.chartCardFull}>
+          <h3 style={s.chartTitle}>Heatmap hebdomadaire (authentification OK)</h3>
+          <WeeklyHeatmap data={weeklyHeatmap} />
+        </div>
+      )}
 
       {emailDetails?.byDomain?.length > 0 && (
         <div style={s.chartCardFull}>
@@ -105,7 +137,7 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {emailDetails.byDomain.map((d, i) => (
-                  <tr key={i} style={{ background: i % 2 === 0 ? '#f9f9f9' : '#fff' }}>
+                  <tr key={i} style={{ background: i % 2 === 0 ? 'var(--card-bg)' : 'var(--bg)' }}>
                     <td style={s.td}><strong>{d.domain}</strong></td>
                     <td style={s.td}>{d.total}</td>
                     <td style={{ ...s.td, color: '#27ae60' }}>{d.full_pass}</td>
@@ -157,7 +189,7 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {unauthorized.slice(0, 50).map((u, i) => (
-                  <tr key={i} style={{ background: i % 2 === 0 ? '#f9f9f9' : '#fff' }}>
+                  <tr key={i} style={{ background: i % 2 === 0 ? 'var(--card-bg)' : 'var(--bg)' }}>
                     <td style={s.td}>{u.source_ip}</td>
                     <td style={s.td}>{u.header_from}</td>
                     <td style={{ ...s.td, color: u.dkim_eval === 'pass' ? '#27ae60' : '#c0392b' }}>{u.dkim_eval}</td>
@@ -194,31 +226,31 @@ function DetailCard({ label, value, color }) {
 }
 
 const s = {
-  title: { fontSize: '1.5rem', fontWeight: 700, color: '#1a1a2e', marginBottom: '20px' },
-  loading: { textAlign: 'center', padding: '60px', color: '#888' },
+  title: { fontSize: '1.5rem', fontWeight: 700, color: 'var(--text)', marginBottom: '20px' },
+  loading: { textAlign: 'center', padding: '60px', color: 'var(--text-secondary)' },
   error: { textAlign: 'center', padding: '60px', color: '#c0392b' },
-  period: { fontSize: '0.85rem', color: '#888', marginBottom: '16px' },
+  period: { fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' },
   cards: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '12px' },
   detailCards: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' },
-  card: { background: '#fff', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', textAlign: 'center' },
-  cardValue: { fontSize: '1.6rem', fontWeight: 800, color: '#1a1a2e' },
-  cardLabel: { fontSize: '0.72rem', color: '#888', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '1px' },
+  card: { background: 'var(--card-bg)', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 8px var(--shadow)', textAlign: 'center' },
+  cardValue: { fontSize: '1.6rem', fontWeight: 800, color: 'var(--text)' },
+  cardLabel: { fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '1px' },
   chartsRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' },
-  chartCard: { background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  chartCardFull: { background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '24px' },
-  chartTitle: { fontSize: '0.9rem', fontWeight: 600, color: '#555', marginBottom: '16px' },
+  chartCard: { background: 'var(--card-bg)', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px var(--shadow)' },
+  chartCardFull: { background: 'var(--card-bg)', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px var(--shadow)', marginBottom: '24px' },
+  chartTitle: { fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '16px' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' },
-  td: { padding: '6px 10px', borderBottom: '1px solid #eee' },
+  td: { padding: '6px 10px', borderBottom: '1px solid var(--border)' },
   rec: { padding: '14px', borderRadius: '8px', marginBottom: '10px', fontSize: '0.85rem' },
   recHeader: { display: 'flex', gap: '8px', marginBottom: '6px', alignItems: 'center' },
-  recCat: { fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#888' },
+  recCat: { fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-secondary)' },
   recPrio: (p) => ({
     fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase',
     padding: '2px 8px', borderRadius: '4px',
     background: p === 'high' ? '#fde8e8' : p === 'medium' ? '#fef3cd' : '#e8f4fd',
     color: p === 'high' ? '#c0392b' : p === 'medium' ? '#856404' : '#0f3460',
   }),
-  recTitle: { fontWeight: 600, color: '#1a1a2e', marginBottom: '4px' },
-  recDetail: { color: '#555', marginBottom: '4px' },
+  recTitle: { fontWeight: 600, color: 'var(--text)', marginBottom: '4px' },
+  recDetail: { color: 'var(--text-secondary)', marginBottom: '4px' },
   recAction: { color: '#0f3460', fontWeight: 500, marginTop: '4px', fontSize: '0.82rem' },
 };
