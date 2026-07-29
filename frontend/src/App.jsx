@@ -56,7 +56,7 @@ export default function App() {
     <div style={s.layout}>
       <nav style={s.sidebar}>
         <div style={s.logo}>DMARC</div>
-        {navItems.map(item => (
+        {navItems.filter(item => item.id !== 'admin' || user.role === 'admin').map(item => (
           <button key={item.id} onClick={() => setPage(item.id)}
             style={{ ...s.navBtn, ...(page === item.id ? s.navBtnActive : {}) }} title={item.title}>
             <span style={{ fontSize: '1.3rem' }}>{item.label}</span>

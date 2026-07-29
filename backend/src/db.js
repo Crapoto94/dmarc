@@ -153,13 +153,6 @@ export async function initDB() {
     )
   `);
 
-  const count = db.exec("SELECT COUNT(*) as c FROM domains");
-  const row = count.length > 0 ? count[0].values[0] : [0];
-  if (row[0] === 0) {
-    db.run("INSERT OR IGNORE INTO domains (domain) VALUES ('fbc.fr')");
-    db.run("INSERT OR IGNORE INTO domains (domain) VALUES ('partyplay.fr')");
-  }
-
   const userCount = db.exec("SELECT COUNT(*) as c FROM users");
   const urow = userCount.length > 0 ? userCount[0].values[0] : [0];
   const adminExists = get("SELECT id FROM users WHERE username = 'admin'");
