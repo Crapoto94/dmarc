@@ -1,30 +1,10 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { randomBytes } from 'crypto';
 import { get, run, all as dbAll } from '../db.js';
+import { getSecret, signToken, setTokenCookie } from '../auth-utils.js';
 
 const router = Router();
-
-function getSecret() {
-  let row = get("SELECT value FROM config WHERE key = 'jwt_secret'");
-  if (!row) {
-    const secret = randomBytes(32).toString('hex');
-    run("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", ['jwt_secret', secret]);
-    row = { value: secret };
-  }
-  return row.value;
-}
-
-function setTokenCookie(res, token) {
-  res.cookie('dmarc_token', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    path: '/',
-  });
-}
 
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
@@ -45,12 +25,7 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Identifiants invalides' });
   }
 
-  const secret = getSecret();
-  const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role },
-    secret,
-    { expiresIn: '7d' }
-  );
+  const token = signToken({ id: user.id, username: user.username, role: user.role });
 
   setTokenCookie(res, token);
   console.log(`  [auth] Login réussi: ${username} (${user.role})`);
