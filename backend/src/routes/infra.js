@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { get, all } from '../db.js';
-import { run } from 'node:child_process';
+import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const execAsync = promisify(run);
+const execAsync = promisify(exec);
 const __dirname = join(fileURLToPath(import.meta.url), '..');
 const router = Router();
 
