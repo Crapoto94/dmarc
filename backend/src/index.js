@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { initDB, run, get } from './db.js';
 import { importReportToDB } from './parser.js';
-import { generateAlerts } from './services/analyzer.js';
+import { generateAlerts, generateAndStoreRecommendations } from './services/analyzer.js';
 import { startScheduler } from './scheduler.js';
 import reportsRouter from './routes/reports.js';
 import domainsRouter from './routes/domains.js';
@@ -72,6 +72,7 @@ async function main() {
   }
 
   generateAlerts();
+  generateAndStoreRecommendations();
   startScheduler();
 
   app.listen(PORT, '0.0.0.0', () => {

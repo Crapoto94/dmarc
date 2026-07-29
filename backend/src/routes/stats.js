@@ -21,7 +21,12 @@ router.get('/email-details', (req, res) => {
 
 router.get('/recommendations', (req, res) => {
   const status = req.query.status || 'active';
-  res.json(getRecommendationsList(status));
+  let recs = getRecommendationsList(status);
+  if (recs.length === 0 && status === 'active') {
+    generateAndStoreRecommendations();
+    recs = getRecommendationsList(status);
+  }
+  res.json(recs);
 });
 
 router.post('/recommendations/:id/status', (req, res) => {
