@@ -4,6 +4,8 @@ import {
   getDispositionBreakdown, getUnauthorizedActivity,
   getEmailDetails, generateRecommendations,
   getMonthlyComparison, getNewSenders, getOverview,
+  getRecommendationsList, updateRecommendationStatus,
+  generateAndStoreRecommendations,
 } from '../services/analyzer.js';
 import { lookupIP } from '../services/ipinfo.js';
 
@@ -18,7 +20,22 @@ router.get('/email-details', (req, res) => {
 });
 
 router.get('/recommendations', (req, res) => {
-  res.json(generateRecommendations());
+  const status = req.query.status || 'active';
+  res.json(getRecommendationsList(status));
+});
+
+router.post('/recommendations/:id/status', (req, res) => {
+  const { status } = req.body;
+  if (!['active', 'dismissed', 'completed'].includes(status)) {
+    return res.status(400).json({ error: 'Statut invalide' });
+  }
+  updateRecommendationStatus(req.params.id, status);
+  res.json({ success: true });
+});
+
+router.post('/recommendations/refresh', (req, res) => {
+  generateAndStoreRecommendations();
+  res.json({ success: true, message: 'Recommandations mises à jour' });
 });
 
 router.get('/timeline', (req, res) => {

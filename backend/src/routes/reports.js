@@ -9,14 +9,34 @@ import { join } from 'path';
 const router = Router();
 
 router.get('/', (req, res) => {
+  const { domain, from, to } = req.query;
+  const conditions = [];
+  const params = [];
+
+  if (domain) {
+    conditions.push('(d.domain LIKE ? OR r.org_name LIKE ?)');
+    params.push(`%${domain}%`, `%${domain}%`);
+  }
+  if (from) {
+    conditions.push('r.begin_ts >= ?');
+    params.push(Math.floor(new Date(from).getTime() / 1000));
+  }
+  if (to) {
+    conditions.push('r.end_ts <= ?');
+    params.push(Math.floor(new Date(to).getTime() / 1000));
+  }
+
+  const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
   const reports = all(`
     SELECT r.*, d.domain as domain_name,
       (SELECT COUNT(*) FROM records WHERE report_id = r.id) as record_count,
       (SELECT COALESCE(SUM(count), 0) FROM records WHERE report_id = r.id) as total_emails
     FROM reports r
     LEFT JOIN domains d ON r.domain_id = d.id
+    ${where}
     ORDER BY r.begin_ts DESC
-  `);
+  `, params);
   res.json(reports);
 });
 

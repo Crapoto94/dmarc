@@ -1,46 +1,28 @@
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
 const DAYS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
 export default function WeeklyHeatmap({ data }) {
-  const map = {};
-  let maxVal = 0;
-  for (const d of data) {
-    const key = `${d.dow}-${d.hour}`;
-    map[key] = d.pass;
-    if (d.pass > maxVal) maxVal = d.pass;
-  }
-
-  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const chartData = DAYS.map((day, i) => {
+    const d = data.find(x => x.dow === i);
+    return {
+      day,
+      total: d ? d.total : 0,
+      pass: d ? d.pass : 0,
+      pct: d && d.total > 0 ? Math.round((d.pass / d.total) * 100) : 0,
+    };
+  });
 
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: `60px repeat(24, 1fr)`, gap: 2, minWidth: 600 }}>
-        <div />
-        {hours.map(h => (
-          <div key={h} style={{ fontSize: 10, color: 'var(--text-secondary)', textAlign: 'center' }}>{h}h</div>
-        ))}
-        {DAYS.map((day, dow) => (
-          <>
-            <div key={day} style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>{day}</div>
-            {hours.map(h => {
-              const key = `${dow}-${h}`;
-              const val = map[key] || 0;
-              const intensity = maxVal > 0 ? val / maxVal : 0;
-              return (
-                <div
-                  key={key}
-                  title={`${day} ${h}h: ${val} emails OK`}
-                  style={{
-                    aspectRatio: '1',
-                    borderRadius: 3,
-                    background: `rgba(39, 174, 96, ${Math.max(0.05, intensity)})`,
-                    border: '1px solid var(--border)',
-                  }}
-                />
-              );
-            })}
-          </>
-        ))}
-      </div>
-    </div>
+    <ResponsiveContainer width="100%" height={220}>
+      <BarChart data={chartData}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <XAxis dataKey="day" tick={{ fontSize: 12 }} stroke="var(--text-secondary)" />
+        <YAxis tick={{ fontSize: 11 }} stroke="var(--text-secondary)" />
+        <Tooltip formatter={(v, name) => [v, name === 'pass' ? 'OK' : name === 'total' ? 'Total' : '']} />
+        <Bar dataKey="pass" name="pass" fill="#27ae60" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="total" name="total" fill="#e0e0e0" radius={[4, 4, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }

@@ -155,9 +155,15 @@ export default function Dashboard() {
 
       {recommendations.length > 0 && (
         <div style={s.chartCardFull}>
-          <h3 style={{ ...s.chartTitle, color: '#e94560' }}>💡 Recommandations</h3>
-          {recommendations.map((r, i) => (
-            <div key={i} style={{
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h3 style={{ ...s.chartTitle, color: '#e94560', margin: 0 }}>💡 Recommandations</h3>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={async () => { await api.refreshRecommendations(); setRecommendations(await api.getRecommendations('active')); }} style={s.smallBtn}>🔄</button>
+              <button onClick={async () => window.open('/alerts', '_self')} style={s.smallBtn}>📋 Voir tout</button>
+            </div>
+          </div>
+          {recommendations.slice(0, 5).map((r) => (
+            <div key={r.id} style={{
               ...s.rec, borderLeft: `4px solid ${
                 r.priority === 'high' ? '#c0392b' : r.priority === 'medium' ? '#f39c12' : '#3498db'
               }`,
@@ -166,12 +172,17 @@ export default function Dashboard() {
               <div style={s.recHeader}>
                 <span style={s.recCat}>{r.category}</span>
                 <span style={s.recPrio(r.priority)}>{r.priority}</span>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                  <button onClick={async () => { await api.updateRecommendationStatus(r.id, 'completed'); setRecommendations(await api.getRecommendations('active')); }} style={s.tinyBtn} title="Fait">✅</button>
+                  <button onClick={async () => { await api.updateRecommendationStatus(r.id, 'dismissed'); setRecommendations(await api.getRecommendations('active')); }} style={s.tinyBtn} title="Ignorer">✕</button>
+                </div>
               </div>
               <div style={s.recTitle}>{r.title}</div>
               <div style={s.recDetail}>{r.detail}</div>
               {r.action && <div style={s.recAction}>👉 {r.action}</div>}
             </div>
           ))}
+          {recommendations.length > 5 && <div style={{ textAlign: 'center', marginTop: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>+{recommendations.length - 5} autres</div>}
         </div>
       )}
 
@@ -235,6 +246,14 @@ const s = {
   card: { background: 'var(--card-bg)', borderRadius: '12px', padding: '16px', boxShadow: '0 2px 8px var(--shadow)', textAlign: 'center' },
   cardValue: { fontSize: '1.6rem', fontWeight: 800, color: 'var(--text)' },
   cardLabel: { fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '1px' },
+  smallBtn: {
+    padding: '4px 10px', border: '1px solid var(--border)', borderRadius: '6px',
+    background: 'var(--card-bg)', color: 'var(--text)', cursor: 'pointer', fontSize: '0.75rem',
+  },
+  tinyBtn: {
+    padding: '2px 6px', border: 'none', borderRadius: '4px',
+    background: 'transparent', cursor: 'pointer', fontSize: '0.8rem',
+  },
   chartsRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' },
   chartCard: { background: 'var(--card-bg)', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px var(--shadow)' },
   chartCardFull: { background: 'var(--card-bg)', borderRadius: '12px', padding: '20px', boxShadow: '0 2px 8px var(--shadow)', marginBottom: '24px' },

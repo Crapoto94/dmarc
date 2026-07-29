@@ -291,6 +291,44 @@ export function generateRecommendations() {
   return recs;
 }
 
+export function generateAndStoreRecommendations() {
+  const recs = generateRecommendations();
+
+  run("UPDATE recommendations SET status = 'obsolete' WHERE status = 'active'");
+
+  for (const r of recs) {
+    const existing = get("SELECT id FROM recommendations WHERE title = ? AND status != 'obsolete'", [r.title]);
+    if (!existing) {
+      run(
+        "INSERT INTO recommendations (category, title, detail, action, priority, status, source) VALUES (?, ?, ?, ?, ?, 'active', 'auto')",
+        [r.category, r.title, r.detail, r.action, r.priority]
+      );
+    } else {
+      run("UPDATE recommendations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", [existing.id]);
+    }
+  }
+
+  run("DELETE FROM recommendations WHERE status = 'obsolete'");
+}
+
+export function getRecommendationsList(status = 'active') {
+  let recs;
+  if (status === 'all') {
+    recs = all("SELECT * FROM recommendations ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, created_at DESC");
+  } else {
+    recs = all("SELECT * FROM recommendations WHERE status = ? ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, created_at DESC", [status]);
+  }
+  return recs.map(r => ({
+    ...r,
+    priority: r.priority || 'medium',
+    status: r.status || 'active',
+  }));
+}
+
+export function updateRecommendationStatus(id, status) {
+  run("UPDATE recommendations SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [status, id]);
+}
+
 export function getImportLog(limit = 50) {
   return all('SELECT * FROM import_log ORDER BY created_at DESC LIMIT ?', [limit]);
 }
@@ -358,13 +396,12 @@ export function getOverview() {
   const weeklyHeatmap = all(`
     SELECT
       CAST(strftime('%w', datetime(rp.begin_ts, 'unixepoch')) AS INTEGER) as dow,
-      CAST(strftime('%H', datetime(rp.begin_ts, 'unixepoch')) AS INTEGER) as hour,
       COALESCE(SUM(r.count), 0) as total,
       COALESCE(SUM(CASE WHEN r.dkim_eval = 'pass' AND r.spf_eval = 'pass' THEN r.count ELSE 0 END), 0) as pass
     FROM records r
     JOIN reports rp ON r.report_id = rp.id
-    GROUP BY dow, hour
-    ORDER BY dow, hour
+    GROUP BY dow
+    ORDER BY dow
   `);
   return { stats, monthly, newSenders, topDomains, authTimeline, weeklyHeatmap };
 }

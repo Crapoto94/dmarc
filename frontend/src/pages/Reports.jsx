@@ -5,18 +5,30 @@ const PAGE_SIZE = 15;
 
 export default function Reports() {
   const [reports, setReports] = useState([]);
+  const [allReports, setAllReports] = useState([]);
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [search, setSearch] = useState('');
+  const [filterDomain, setFilterDomain] = useState('');
+  const [filterFrom, setFilterFrom] = useState('');
+  const [filterTo, setFilterTo] = useState('');
   const [page, setPage] = useState(0);
 
   const loadReports = () => {
-    api.getReports().then(setReports).catch(() => {}).finally(() => setLoading(false));
+    setLoading(true);
+    const filters = {};
+    if (filterDomain) filters.domain = filterDomain;
+    if (filterFrom) filters.from = filterFrom;
+    if (filterTo) filters.to = filterTo;
+    api.getReports(filters).then(r => {
+      setAllReports(r);
+      setReports(r);
+    }).catch(() => {}).finally(() => setLoading(false));
   };
 
-  useEffect(loadReports, []);
+  useEffect(loadReports, [filterDomain, filterFrom, filterTo]);
 
   const filtered = reports.filter(r =>
     !search || (r.org_name || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -51,10 +63,16 @@ export default function Reports() {
     <div>
       <div style={s.header}>
         <h1 style={s.title}>Rapports DMARC</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <input style={s.searchInput} placeholder="Rechercher..." value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} />
+          <input style={{ ...s.searchInput, width: 130 }} type="date" value={filterFrom} onChange={e => { setFilterFrom(e.target.value); setPage(0); }} title="Du" />
+          <input style={{ ...s.searchInput, width: 130 }} type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setPage(0); }} title="Au" />
+          <input style={{ ...s.searchInput, width: 150 }} placeholder="Domaine" value={filterDomain} onChange={e => { setFilterDomain(e.target.value); setPage(0); }} />
+          {(filterDomain || filterFrom || filterTo) && (
+            <button style={{ ...s.btn, background: '#888' }} onClick={() => { setFilterDomain(''); setFilterFrom(''); setFilterTo(''); }}>✕</button>
+          )}
           <button style={s.btn} onClick={scanFolder} disabled={scanning}>
-            {scanning ? 'Scan...' : 'Scanner un dossier'}
+            {scanning ? 'Scan...' : '📁'}
           </button>
         </div>
       </div>
@@ -101,25 +119,29 @@ export default function Reports() {
                 <Meta label="Report ID" value={detail.report_id?.slice(0, 20) + '...'} />
               </div>
 
-              <h3 style={{ marginTop: '20px', fontSize: '0.9rem', color: '#555' }}>
+              <h3 style={{ marginTop: '20px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                 Enregistrements ({detail.records?.length})
               </h3>
               <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
                 <table style={s.table}>
                   <thead>
                     <tr>
-                      <th>IP Source</th><th>Titulaire</th><th>Count</th><th>Header From</th><th>DKIM</th><th>SPF</th><th>Disposition</th>
+                      <th>IP Source</th><th>Titulaire</th><th>ASN</th><th>Pays</th><th>Count</th><th>Header From</th><th>DKIM</th><th>SPF</th><th>Disposition</th>
                     </tr>
                   </thead>
                   <tbody>
                     {detail.records?.map((rec, i) => (
                       <tr key={i} style={{ background: i % 2 === 0 ? 'var(--card-bg)' : 'var(--bg)' }}>
                         <td style={s.td}>{rec.source_ip}</td>
-                        <td style={{ ...s.td, fontSize: '0.75rem', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rec.ip_org || ''}>
+                        <td style={{ ...s.td, fontSize: '0.75rem', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rec.ip_org || ''}>
                           {rec.ip_org || rec.ip_isp || '...'}
                         </td>
+                        <td style={{ ...s.td, fontSize: '0.75rem' }}>{rec.ip_asn || ''}</td>
+                        <td style={s.td}>{rec.ip_country || ''}</td>
                         <td style={s.td}>{rec.count}</td>
-                        <td style={s.td}>{rec.header_from}</td>
+                        <td style={{ ...s.td, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rec.header_from}>
+                          {rec.header_from}
+                        </td>
                         <td style={{ ...s.td, color: rec.dkim_eval === 'pass' ? '#27ae60' : '#c0392b' }}>{rec.dkim_eval}</td>
                         <td style={{ ...s.td, color: rec.spf_eval === 'pass' ? '#27ae60' : '#c0392b' }}>{rec.spf_eval}</td>
                         <td style={s.td}>{rec.disposition}</td>
@@ -128,6 +150,17 @@ export default function Reports() {
                   </tbody>
                 </table>
               </div>
+
+              {detail.records?.some(r => r.dkim_results?.length > 0 || r.spf_results?.length > 0) && (
+                <div style={{ marginTop: 16 }}>
+                  {detail.records.filter(r => r.dkim_results?.length > 0).slice(0, 3).map((rec, i) => (
+                    <div key={i} style={{ fontSize: '0.78rem', marginBottom: 8, padding: 8, background: 'var(--bg)', borderRadius: 6 }}>
+                      <strong>{rec.source_ip}</strong> — DKIM : {rec.dkim_results.map(d => `${d.domain}=${d.result}`).join(', ')}
+                      &nbsp;|&nbsp; SPF : {rec.spf_results.map(s => `${s.domain}=${s.result}`).join(', ')}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <div style={s.empty}>Sélectionnez un rapport</div>
@@ -151,23 +184,23 @@ const s = {
   title: { fontSize: '1.5rem', fontWeight: 700, color: 'var(--text)' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: 8 },
   btn: {
-    padding: '10px 20px', background: '#0f3460', color: '#fff', border: 'none',
-    borderRadius: '8px', cursor: 'pointer', fontWeight: 600,
+    padding: '10px 16px', background: '#0f3460', color: '#fff', border: 'none',
+    borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem',
   },
   searchInput: {
     padding: '8px 14px', border: '1px solid var(--border)', borderRadius: '8px',
     background: 'var(--card-bg)', color: 'var(--text)', outline: 'none',
-    fontSize: '0.85rem', width: '200px',
+    fontSize: '0.85rem', width: '180px',
   },
   pageBtn: {
     padding: '4px 12px', border: '1px solid var(--border)', borderRadius: '6px',
-    background: 'var(--card-bg)', color: 'var(--text)', cursor: 'pointer',
+    background: 'var(--card-bg)', color: 'var(--text)', cursor: 'pointer', fontSize: '0.8rem',
   },
   loading: { textAlign: 'center', padding: '60px', color: 'var(--text-secondary)' },
   grid: { display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px' },
   listPanel: {
     background: 'var(--card-bg)', borderRadius: '12px', padding: '16px',
-    boxShadow: '0 2px 8px var(--shadow)', maxHeight: 'calc(100vh - 160px)', overflowY: 'auto',
+    boxShadow: '0 2px 8px var(--shadow)', maxHeight: 'calc(100vh - 200px)', overflowY: 'auto',
   },
   reportItem: {
     padding: '12px', borderRadius: '8px', cursor: 'pointer', marginBottom: '8px',
@@ -187,7 +220,7 @@ const s = {
   meta: { padding: '8px 12px', background: 'var(--bg)', borderRadius: '6px' },
   metaLabel: { display: 'block', fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' },
   metaValue: { fontSize: '0.85rem', color: 'var(--text)', fontWeight: 500 },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' },
-  td: { padding: '6px 10px', borderBottom: '1px solid var(--border)' },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' },
+  td: { padding: '5px 8px', borderBottom: '1px solid var(--border)' },
   empty: { textAlign: 'center', padding: '60px', color: 'var(--text-secondary)' },
 };

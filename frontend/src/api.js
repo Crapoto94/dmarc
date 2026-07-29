@@ -38,13 +38,22 @@ export const api = {
   getDispositions: () => fetchJSON('/stats/dispositions'),
   getUnauthorized: () => fetchJSON('/stats/unauthorized'),
   getEmailDetails: () => fetchJSON('/stats/email-details'),
-  getRecommendations: () => fetchJSON('/stats/recommendations'),
+  getRecommendations: (status = 'active') => fetchJSON(`/stats/recommendations?status=${status}`),
+  updateRecommendationStatus: (id, status) => fetchJSON(`/stats/recommendations/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
+  refreshRecommendations: () => fetchJSON('/stats/recommendations/refresh', { method: 'POST' }),
   getMonthlyComparison: () => fetchJSON('/stats/monthly'),
   getNewSenders: () => fetchJSON('/stats/new-senders'),
   getOverview: () => fetchJSON('/stats/overview'),
   lookupIP: (ip) => fetchJSON(`/stats/ip-lookup?ip=${encodeURIComponent(ip)}`),
 
-  getReports: () => fetchJSON('/reports'),
+  getReports: (filters = {}) => {
+    const params = new URLSearchParams();
+    if (filters.domain) params.set('domain', filters.domain);
+    if (filters.from) params.set('from', filters.from);
+    if (filters.to) params.set('to', filters.to);
+    const qs = params.toString();
+    return fetchJSON(`/reports${qs ? '?' + qs : ''}`);
+  },
   getReport: (id) => fetchJSON(`/reports/${id}`),
   importReport: (filepath, filename) => fetchJSON('/reports/import', {
     method: 'POST', body: JSON.stringify({ filepath, filename }),

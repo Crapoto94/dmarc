@@ -130,6 +130,20 @@ export async function initDB() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS recommendations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category TEXT NOT NULL,
+      title TEXT NOT NULL,
+      detail TEXT,
+      action TEXT,
+      priority TEXT DEFAULT 'medium',
+      status TEXT DEFAULT 'active',
+      source TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
   const count = db.exec("SELECT COUNT(*) as c FROM domains");
   const row = count.length > 0 ? count[0].values[0] : [0];
