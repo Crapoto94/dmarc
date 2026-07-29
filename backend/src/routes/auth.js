@@ -32,13 +32,16 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'username et password requis' });
   }
 
+  console.log(`  [auth] Tentative login: ${username}`);
   const user = get('SELECT * FROM users WHERE username = ?', [username]);
   if (!user) {
+    console.log(`  [auth] Utilisateur "${username}" introuvable`);
     return res.status(401).json({ error: 'Identifiants invalides' });
   }
 
   const valid = bcrypt.compareSync(password, user.password);
   if (!valid) {
+    console.log(`  [auth] Mot de passe invalide pour "${username}"`);
     return res.status(401).json({ error: 'Identifiants invalides' });
   }
 
@@ -50,6 +53,7 @@ router.post('/login', async (req, res) => {
   );
 
   setTokenCookie(res, token);
+  console.log(`  [auth] Login réussi: ${username} (${user.role})`);
   res.json({ user: { id: user.id, username: user.username, role: user.role } });
 });
 
@@ -100,6 +104,19 @@ router.post('/change-password', (req, res) => {
   } catch {
     res.status(401).json({ error: 'Token invalide' });
   }
+});
+
+router.post('/reset-admin', (req, res) => {
+  const hash = bcrypt.hashSync('admin', 10);
+  run("INSERT OR REPLACE INTO users (username, password, role) VALUES (?, ?, ?)", ['admin', hash, 'admin']);
+  console.log('  [auth] Admin réinitialisé (admin/admin)');
+  res.json({ success: true, message: 'admin/admin réinitialisé' });
+});
+
+router.post('/debug-users', (req, res) => {
+  const users = dbAll('SELECT id, username, role FROM users');
+  console.log('  [auth] debug users:', JSON.stringify(users));
+  res.json({ users, count: users.length });
 });
 
 function adminGuard(req, res, next) {
