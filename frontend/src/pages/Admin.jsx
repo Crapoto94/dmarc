@@ -156,6 +156,20 @@ export default function Admin({ user }) {
               </>
             )}
           </div>
+
+          <div style={{ ...s.card, border: '2px solid #c0392b' }}>
+            <div style={s.cardHeader}><span style={s.cardIcon}>⚠️</span> Zone dangereuse</div>
+            <p style={s.cardDesc}>Ces actions sont irréversibles.</p>
+            <button style={{ ...s.dangerBtn }} onClick={async () => {
+              if (!window.confirm('⚠️ Supprimer TOUS les rapports et enregistrements ? Cette action est irréversible.')) return;
+              if (!window.confirm('Es-tu vraiment sûr ? Toutes les données DMARC seront perdues.')) return;
+              try {
+                const res = await fetch('/api/reports/delete-all', { method: 'POST', credentials: 'include' });
+                const data = await res.json();
+                alert(data.success ? `✅ ${data.deleted} rapport(s) supprimés` : 'Erreur: ' + (data.error || 'inconnue'));
+              } catch (e) { alert('Erreur: ' + e.message); }
+            }}>🗑️ Supprimer tous les rapports</button>
+          </div>
         </>
       )}
 
@@ -240,6 +254,7 @@ const s = {
   actions: { display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' },
   primaryBtn: { padding: '12px 28px', background: '#e94560', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem' },
   secondaryBtn: { padding: '12px 28px', background: '#0f3460', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.95rem' },
+  dangerBtn: { padding: '12px 28px', background: '#c0392b', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.95rem' },
   th: { padding: '8px 10px', borderBottom: '2px solid #eee', fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', letterSpacing: '1px', textAlign: 'left' },
   td: { padding: '6px 10px', borderBottom: '1px solid #eee', fontSize: '0.82rem' },
 };

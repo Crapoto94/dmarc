@@ -116,4 +116,16 @@ router.delete('/:id', (req, res) => {
   res.json({ success: true });
 });
 
+router.post('/delete-all', async (req, res) => {
+  const { getGlobalStats } = await import('../services/analyzer.js');
+  const count = get('SELECT COUNT(*) as c FROM reports').c;
+  run('DELETE FROM dkim_results');
+  run('DELETE FROM spf_results');
+  run('DELETE FROM records');
+  run('DELETE FROM reports');
+  run('DELETE FROM alerts');
+  run('DELETE FROM recommendations');
+  res.json({ success: true, deleted: count });
+});
+
 export default router;

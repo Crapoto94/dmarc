@@ -159,7 +159,11 @@ export default function Dashboard() {
             <h3 style={{ ...s.chartTitle, color: '#e94560', margin: 0 }}>💡 Recommandations</h3>
             <div style={{ display: 'flex', gap: 6 }}>
               <button onClick={async () => { await api.refreshRecommendations(); setRecommendations(await api.getRecommendations('active')); }} style={s.smallBtn}>🔄</button>
-              <button onClick={async () => window.open('/alerts', '_self')} style={s.smallBtn}>📋 Voir tout</button>
+              <button onClick={async () => {
+                const allRecs = await api.getRecommendations('all');
+                setRecommendations(allRecs.filter(r => r.status === 'active'));
+                alert(`Total: ${allRecs.length} (${allRecs.filter(r => r.status === 'active').length} actives, ${allRecs.filter(r => r.status === 'completed').length} faites, ${allRecs.filter(r => r.status === 'dismissed').length} ignorées)`);
+              }} style={s.smallBtn}>📋 Stats</button>
             </div>
           </div>
           {recommendations.slice(0, 5).map((r) => (
