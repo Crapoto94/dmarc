@@ -1,5 +1,5 @@
-import initSqlJs from 'sql.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import Database from 'better-sqlite3';
+import { existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -13,32 +13,25 @@ let db = null;
 
 export async function initDB() {
   dbPath = process.env.DB_PATH || join(__dirname, '..', 'data', 'dmarc.db');
-  const SQL = await initSqlJs();
 
-  if (dbPath === ':memory:') {
-    db = new SQL.Database();
-  } else {
-    if (!existsSync(dirname(dbPath))) {
-      mkdirSync(dirname(dbPath), { recursive: true });
-    }
-    if (existsSync(dbPath)) {
-      const buffer = readFileSync(dbPath);
-      db = new SQL.Database(buffer);
-    } else {
-      db = new SQL.Database();
-    }
+  if (dbPath !== ':memory:' && !existsSync(dirname(dbPath))) {
+    mkdirSync(dirname(dbPath), { recursive: true });
   }
 
-  db.run('PRAGMA foreign_keys=ON');
+  db = new Database(dbPath);
+  db.pragma('foreign_keys = ON');
+  if (dbPath !== ':memory:') {
+    db.pragma('journal_mode = WAL');
+  }
 
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS domains (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       domain TEXT UNIQUE NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS reports (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       filename TEXT,
@@ -55,7 +48,7 @@ export async function initDB() {
       FOREIGN KEY (domain_id) REFERENCES domains(id)
     )
   `);
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS records (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       report_id INTEGER,
@@ -70,7 +63,7 @@ export async function initDB() {
       FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
     )
   `);
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS dkim_results (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       record_id INTEGER,
@@ -80,7 +73,7 @@ export async function initDB() {
       FOREIGN KEY (record_id) REFERENCES records(id) ON DELETE CASCADE
     )
   `);
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS spf_results (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       record_id INTEGER,
@@ -90,7 +83,7 @@ export async function initDB() {
       FOREIGN KEY (record_id) REFERENCES records(id) ON DELETE CASCADE
     )
   `);
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS alerts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       type TEXT,
@@ -101,13 +94,13 @@ export async function initDB() {
       acknowledged INTEGER DEFAULT 0
     )
   `);
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS config (
       key TEXT PRIMARY KEY,
       value TEXT
     )
   `);
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
@@ -116,7 +109,7 @@ export async function initDB() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS ip_cache (
       ip TEXT PRIMARY KEY,
       org TEXT,
@@ -126,7 +119,7 @@ export async function initDB() {
       looked_up_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS rbl_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       ip TEXT NOT NULL,
@@ -135,8 +128,8 @@ export async function initDB() {
       checked_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  db.run('CREATE INDEX IF NOT EXISTS idx_rbl_history_ip ON rbl_history(ip)');
-  db.run(`
+  db.exec('CREATE INDEX IF NOT EXISTS idx_rbl_history_ip ON rbl_history(ip)');
+  db.exec(`
     CREATE TABLE IF NOT EXISTS import_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       source TEXT,
@@ -147,7 +140,7 @@ export async function initDB() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS recommendations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       category TEXT NOT NULL,
@@ -162,104 +155,56 @@ export async function initDB() {
     )
   `);
 
-  const userCount = db.exec("SELECT COUNT(*) as c FROM users");
-  const urow = userCount.length > 0 ? userCount[0].values[0] : [0];
+  const userCount = get('SELECT COUNT(*) as c FROM users');
   const adminExists = get("SELECT id FROM users WHERE username = 'admin'");
-  if (urow[0] === 0 || !adminExists) {
+  if (userCount.c === 0 || !adminExists) {
     const bcrypt = await import('bcryptjs');
     const hash = bcrypt.hashSync('admin', 10);
     run("INSERT OR REPLACE INTO users (username, password, role) VALUES (?, ?, ?)", ['admin', hash, 'admin']);
     console.log('  [*] Utilisateur admin créé par défaut (admin/admin)');
   }
 
-  saveDB();
   console.log('  [*] Base de données initialisée');
 }
 
-// Only save if not in a transaction (sql.js doesn't support WAL properly)
-let inTransaction = false;
+// Conservée pour compatibilité d'API : better-sqlite3 écrit sur disque de façon
+// synchrone à chaque requête, il n'y a donc plus d'étape de sauvegarde explicite à faire.
+export function saveDB() {}
 
-export function saveDB() {
-  if (db && !inTransaction) {
-    if (dbPath === ':memory:') return;
-    const data = db.export();
-    const dir = dirname(dbPath);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    try {
-      writeFileSync(dbPath, Buffer.from(data));
-    } catch (err) {
-      console.error('  [!] Erreur sauvegarde DB:', err.message);
-    }
-  }
-}
-
-function prepare(sql, params = []) {
+function prepare(sql) {
   if (!db) throw new Error('Database not initialized');
-  const stmt = db.prepare(sql);
-  if (params.length > 0) stmt.bind(params);
-  return stmt;
+  return db.prepare(sql);
 }
 
 export function all(sql, params = []) {
-  const stmt = prepare(sql, params);
-  const rows = [];
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject());
-  }
-  stmt.free();
-  return rows;
+  return prepare(sql).all(params);
 }
 
 export function get(sql, params = []) {
-  const rows = all(sql, params);
-  return rows.length > 0 ? rows[0] : null;
+  const row = prepare(sql).get(params);
+  return row === undefined ? null : row;
 }
 
 export function run(sql, params = []) {
-  if (!db) throw new Error('Database not initialized');
-  db.run(sql, params);
-  const lastId = db.exec("SELECT last_insert_rowid() as id");
-  const changes = db.getRowsModified();
-  if (!inTransaction) saveDB();
+  const info = prepare(sql).run(params);
   return {
-    lastInsertRowid: lastId.length > 0 ? lastId[0].values[0][0] : null,
-    changes,
+    lastInsertRowid: info.lastInsertRowid,
+    changes: info.changes,
   };
 }
 
 export function exec(sql) {
   if (!db) throw new Error('Database not initialized');
-  const result = db.exec(sql);
-  if (!inTransaction) saveDB();
-  return result;
+  return db.exec(sql);
 }
 
 export function transaction(fn) {
   if (!db) throw new Error('Database not initialized');
-  const wasInTransaction = inTransaction;
-  if (!wasInTransaction) {
-    inTransaction = true;
-    db.run('BEGIN');
-  }
-  try {
-    fn();
-    if (!wasInTransaction) {
-      db.run('COMMIT');
-      inTransaction = false;
-      saveDB();
-    }
-  } catch (err) {
-    if (!wasInTransaction) {
-      try { db.run('ROLLBACK'); } catch {}
-      inTransaction = false;
-    }
-    throw err;
-  }
+  db.transaction(fn)();
 }
 
 export function closeDB() {
   if (db) {
-    saveDB();
     db.close();
     db = null;
   }
