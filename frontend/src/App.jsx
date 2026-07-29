@@ -54,7 +54,7 @@ export default function App() {
 
   return (
     <div style={s.layout}>
-      <nav style={s.sidebar}>
+      <nav className="no-print" style={s.sidebar}>
         <div style={s.logo}>DMARC</div>
         {navItems.filter(item => item.id !== 'admin' || user.role === 'admin').map(item => (
           <button key={item.id} onClick={() => setPage(item.id)}

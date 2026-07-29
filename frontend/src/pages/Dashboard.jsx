@@ -49,12 +49,61 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
+  const exportCSV = () => {
+    const lines = [];
+    lines.push('Tableau de bord DMARC');
+    lines.push(`Généré le;${new Date().toLocaleString()}`);
+    if (stats?.period_begin) {
+      lines.push(`Période;${new Date(stats.period_begin).toLocaleDateString()} → ${new Date(stats.period_end).toLocaleDateString()}`);
+    }
+    lines.push('');
+    lines.push('Résumé');
+    lines.push('Métrique;Valeur');
+    lines.push(`Emails analysés;${stats?.total_emails ?? 0}`);
+    lines.push(`Taux OK;${stats?.pass_pct ?? 0}%`);
+    lines.push(`Taux échec;${stats?.fail_pct ?? 0}%`);
+    lines.push(`Rapports;${stats?.report_count ?? 0}`);
+    lines.push(`Domaines;${stats?.domain_count ?? 0}`);
+    lines.push(`IPs uniques;${stats?.unique_source_ips ?? 0}`);
+    lines.push(`DKIM+SPF OK;${stats?.pass_emails ?? 0}`);
+    lines.push(`DKIM OK seul;${stats?.dkim_only_pass ?? 0}`);
+    lines.push(`SPF OK seul;${stats?.spf_only_pass ?? 0}`);
+    lines.push(`Aucun OK;${stats?.both_fail ?? 0}`);
+    lines.push('');
+    lines.push('Détail par domaine expéditeur');
+    lines.push('Domaine;Total;DKIM+SPF;DKIM seul;SPF seul;Aucun;Sources IP');
+    for (const d of emailDetails?.byDomain || []) {
+      lines.push(`${d.domain};${d.total};${d.full_pass};${d.dkim_only};${d.spf_only};${d.both_fail};${d.sources_count}`);
+    }
+    lines.push('');
+    lines.push('Top sources IP');
+    lines.push('IP;OK;Échec;Domaines utilisés');
+    for (const src of sources) {
+      lines.push(`${src.source_ip};${src.pass};${src.fail};${src.domains_used}`);
+    }
+
+    const csv = lines.join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dashboard-dmarc_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) return <div style={s.loading}>Chargement...</div>;
   if (error) return <div style={s.error}>Erreur : {error}</div>;
 
   return (
     <div>
-      <h1 style={s.title}>Tableau de bord DMARC</h1>
+      <div style={s.header}>
+        <h1 style={s.title}>Tableau de bord DMARC</h1>
+        <div className="no-print" style={{ display: 'flex', gap: 8 }}>
+          <button style={s.exportBtn} onClick={exportCSV}>Exporter (.csv)</button>
+          <button style={s.exportBtn} onClick={() => window.print()}>Exporter en PDF</button>
+        </div>
+      </div>
 
       {stats && (
         <>
@@ -242,6 +291,11 @@ function DetailCard({ label, value, color }) {
 
 const s = {
   title: { fontSize: '1.5rem', fontWeight: 700, color: 'var(--text)', marginBottom: '20px' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 },
+  exportBtn: {
+    padding: '8px 16px', background: '#0f3460', color: '#fff', border: 'none',
+    borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem',
+  },
   loading: { textAlign: 'center', padding: '60px', color: 'var(--text-secondary)' },
   error: { textAlign: 'center', padding: '60px', color: '#c0392b' },
   period: { fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' },

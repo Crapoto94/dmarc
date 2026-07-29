@@ -265,6 +265,32 @@ function defaultRange() {
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 }
 
+function previousRange(range) {
+  const from = new Date(range.from);
+  const to = new Date(range.to);
+  const days = Math.round((to - from) / 86400000) + 1;
+  const prevTo = new Date(from);
+  prevTo.setDate(prevTo.getDate() - 1);
+  const prevFrom = new Date(prevTo);
+  prevFrom.setDate(prevFrom.getDate() - days + 1);
+  return { from: prevFrom.toISOString().slice(0, 10), to: prevTo.toISOString().slice(0, 10) };
+}
+
+function Delta({ current, previous, suffix = '', points = false }) {
+  if (previous === undefined || previous === null) return null;
+  if (previous === 0 && current === 0) return <span style={s.deltaFlat}>=</span>;
+  if (previous === 0) return <span style={s.deltaUp}>▲ nouveau</span>;
+  const diff = points ? current - previous : ((current - previous) / previous) * 100;
+  const rounded = Math.round(diff * 10) / 10;
+  if (rounded === 0) return <span style={s.deltaFlat}>=</span>;
+  const up = rounded > 0;
+  return (
+    <span style={up ? s.deltaUp : s.deltaDown}>
+      {up ? '▲' : '▼'} {Math.abs(rounded)}{points ? ' pt' : '%'}{suffix}
+    </span>
+  );
+}
+
 function BySource({ domains }) {
   const [domain, setDomain] = useState('');
   const [subdomain, setSubdomain] = useState('');
@@ -274,6 +300,8 @@ function BySource({ domains }) {
   const [expanded, setExpanded] = useState(null);
   const [drill, setDrill] = useState(null);
   const [drillLoading, setDrillLoading] = useState(false);
+  const [compare, setCompare] = useState(false);
+  const [prevSources, setPrevSources] = useState([]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -284,6 +312,16 @@ function BySource({ domains }) {
   }, [domain, subdomain, range]);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    if (!compare) { setPrevSources([]); return; }
+    const prev = previousRange(range);
+    api.getDeliverabilitySources({ domain, subdomain, from: prev.from, to: prev.to })
+      .then(setPrevSources)
+      .catch(() => setPrevSources([]));
+  }, [compare, domain, subdomain, range]);
+
+  const prevBySource = Object.fromEntries(prevSources.map(p => [p.source, p]));
 
   const shiftPeriod = (dir) => {
     const from = new Date(range.from);
@@ -349,6 +387,10 @@ function BySource({ domains }) {
         <span style={{ color: 'var(--text-secondary)' }}>→</span>
         <input style={{ ...s.searchInput, width: 140 }} type="date" value={range.to} onChange={e => setRange(r => ({ ...r, to: e.target.value }))} />
         <button style={s.pageBtn} onClick={() => shiftPeriod(1)}>Période suivante →</button>
+        <label style={s.compareLabel}>
+          <input type="checkbox" checked={compare} onChange={e => setCompare(e.target.checked)} />
+          Comparer à la période précédente {compare && `(${previousRange(range).from} → ${previousRange(range).to})`}
+        </label>
       </div>
 
       <div style={s.tableCard}>
@@ -367,11 +409,16 @@ function BySource({ domains }) {
               </tr>
             </thead>
             <tbody>
-              {sources.map((src, i) => (
+              {sources.map((src, i) => {
+                const prev = prevBySource[src.source];
+                return (
                 <React.Fragment key={src.source}>
                   <tr style={{ background: i % 2 === 0 ? 'var(--card-bg)' : 'var(--bg)' }}>
                     <td style={s.td}><strong>{src.source}</strong></td>
-                    <td style={s.td}>{src.volume.toLocaleString()}</td>
+                    <td style={s.td}>
+                      {src.volume.toLocaleString()}
+                      {compare && <Delta current={src.volume} previous={prev?.volume} />}
+                    </td>
                     <td style={{ ...s.td, color: '#27ae60' }}>{src.dmarc_pass.toLocaleString()}</td>
                     <td style={{ ...s.td, color: '#c0392b' }}>{src.dmarc_fail.toLocaleString()}</td>
                     <td style={s.td}>
@@ -379,6 +426,7 @@ function BySource({ domains }) {
                         padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: '0.75rem',
                         color: src.dmarc_pct >= 95 ? '#27ae60' : src.dmarc_pct >= 50 ? '#f39c12' : '#c0392b',
                       }}>{src.dmarc_pct}%</span>
+                      {compare && <Delta current={src.dmarc_pct} previous={prev?.dmarc_pct} points />}
                     </td>
                     <td style={s.td}>{src.spf_pass.toLocaleString()}</td>
                     <td style={s.td}>{src.dkim_pass.toLocaleString()}</td>
@@ -441,7 +489,8 @@ function BySource({ domains }) {
                     </tr>
                   )}
                 </React.Fragment>
-              ))}
+                );
+              })}
               {!loading && sources.length === 0 && (
                 <tr><td style={s.td} colSpan={8}>Aucune source pour cette période</td></tr>
               )}
@@ -460,7 +509,7 @@ const s = {
     padding: '8px 18px', borderRadius: '8px', border: '1px solid var(--border)',
     background: 'var(--card-bg)', color: 'var(--text-secondary)', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem',
   },
-  viewTabActive: { background: '#0f3460', color: '#fff', borderColor: '#0f3460' },
+  viewTabActive: { background: '#0f3460', color: '#fff', border: '1px solid #0f3460' },
   filterBar: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' },
   select: {
     padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px',
@@ -480,8 +529,8 @@ const s = {
     borderBottom: '1px solid var(--border)',
   },
   categoryTab: {
-    padding: '10px 16px', background: 'transparent', border: 'none', cursor: 'pointer',
-    fontSize: '0.82rem',
+    padding: '10px 16px', background: 'transparent', cursor: 'pointer', fontSize: '0.82rem',
+    borderTop: 'none', borderLeft: 'none', borderRight: 'none', borderBottom: '3px solid transparent',
   },
   chartCard: {
     background: 'var(--card-bg)', borderRadius: '12px', padding: '16px',
@@ -514,4 +563,11 @@ const s = {
     border: '1px solid var(--border)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px',
     lineHeight: 1.5,
   },
+  compareLabel: {
+    display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem',
+    color: 'var(--text-secondary)', marginLeft: 'auto', cursor: 'pointer',
+  },
+  deltaUp: { marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, color: '#27ae60' },
+  deltaDown: { marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, color: '#c0392b' },
+  deltaFlat: { marginLeft: 6, fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' },
 };
