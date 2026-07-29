@@ -263,6 +263,12 @@ function BySource({ domains }) {
 
   return (
     <div>
+      <p style={s.hint}>
+        La <strong>source</strong> est la plateforme d'envoi technique (ESP) détectée via le domaine SPF/DKIM
+        de chaque email (ex: Brevo, Mailjet, envoi direct...). Ce n'est <strong>pas</strong> le "Rapporteur"
+        (Google, Microsoft/Outlook, Yahoo...), qui est l'organisme qui vous envoie le rapport DMARC agrégé —
+        celui-ci reste visible dans le détail via "Voir plus", et sur la page Rapports.
+      </p>
       <div style={s.filterBar}>
         <select style={s.select} value={domain} onChange={e => { setDomain(e.target.value); setSubdomain(''); }}>
           <option value="">Filtre par domaine</option>
@@ -290,7 +296,7 @@ function BySource({ domains }) {
           <table style={s.table}>
             <thead>
               <tr>
-                <th style={s.th}>Source</th>
+                <th style={s.th}>Source (plateforme d'envoi)</th>
                 <th style={s.th}>Volume</th>
                 <th style={s.th}>DMARC ✓</th>
                 <th style={s.th}>DMARC ✗</th>
@@ -442,5 +448,10 @@ const s = {
   voirPlusBtn: {
     padding: '4px 10px', border: '1px solid #0f3460', borderRadius: '6px',
     background: 'transparent', color: '#0f3460', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600,
+  },
+  hint: {
+    fontSize: '0.8rem', color: 'var(--text-secondary)', background: 'var(--card-bg)',
+    border: '1px solid var(--border)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px',
+    lineHeight: 1.5,
   },
 };

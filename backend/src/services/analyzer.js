@@ -433,9 +433,17 @@ export function getDeliverabilityByDomain({ domain = '', category = 'perfect', p
   return { counts, timeline, records, total: totalRow.c, page, pageSize };
 }
 
+// Identifie la plateforme d'envoi (ESP) réelle d'un enregistrement. Le domaine SPF
+// (ex: sender-sib.com pour Brevo, mailjet.com...) est le signal le plus fiable car le
+// domaine DKIM correspond souvent simplement au domaine du client (auto-signature),
+// ce qui n'apprend rien sur l'expéditeur technique. On retombe sur DKIM, puis sur le
+// domaine de l'enveloppe, puis enfin sur header_from (envoi "en direct", sans ESP tiers
+// identifiable) pour éviter de classer trop d'enregistrements en "inconnu".
 const SOURCE_EXPR = `COALESCE(
-  (SELECT dk.domain FROM dkim_results dk WHERE dk.record_id = r.id ORDER BY dk.id LIMIT 1),
-  CASE WHEN instr(r.envelope_from, '@') > 0 THEN substr(r.envelope_from, instr(r.envelope_from, '@') + 1) ELSE r.envelope_from END
+  NULLIF((SELECT sp.domain FROM spf_results sp WHERE sp.record_id = r.id ORDER BY CASE sp.scope WHEN 'mfrom' THEN 0 ELSE 1 END, sp.id LIMIT 1), ''),
+  NULLIF((SELECT dk.domain FROM dkim_results dk WHERE dk.record_id = r.id ORDER BY dk.id LIMIT 1), ''),
+  NULLIF(CASE WHEN instr(r.envelope_from, '@') > 0 THEN substr(r.envelope_from, instr(r.envelope_from, '@') + 1) ELSE r.envelope_from END, ''),
+  NULLIF(r.header_from, '')
 )`;
 
 export function getDeliverabilitySources({ domain = '', subdomain = '', from, to } = {}) {
