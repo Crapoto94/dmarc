@@ -87,24 +87,6 @@ export default function Reports() {
             </div>
           )}
         </div>
-            <div
-              key={r.id}
-              onClick={() => selectReport(r.id)}
-              style={{
-                ...s.reportItem,
-                ...(selected === r.id ? s.reportItemActive : {}),
-              }}
-            >
-              <div style={s.reportOrg}>{r.org_name || 'Inconnu'}</div>
-              <div style={s.reportDomain}>{r.domain_name || r.domain}</div>
-              <div style={s.reportMeta}>
-                {new Date(r.begin_ts * 1000).toLocaleDateString()} · {r.total_emails} emails
-              </div>
-              <div style={s.reportPolicy}>p={r.policy || '?'}</div>
-            </div>
-          ))}
-          {reports.length === 0 && <div style={s.empty}>Aucun rapport importé</div>}
-        </div>
 
         <div style={s.detailPanel}>
           {detail ? (
