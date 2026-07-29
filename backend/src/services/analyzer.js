@@ -201,6 +201,36 @@ export function generateAlerts() {
     }
   }
 
+  newAlerts.push(...detectNonConformSources());
+
+  return newAlerts;
+}
+
+// Alerte (une seule fois par source, indépendamment du volume) dès qu'une plateforme
+// d'envoi (cf. SOURCE_EXPR, "Par source" dans Délivrabilité) échoue DKIM ET SPF.
+export function detectNonConformSources() {
+  const rows = all(`
+    SELECT ${SOURCE_EXPR} as source, r.header_from, COALESCE(SUM(r.count), 0) as total
+    FROM records r
+    JOIN reports rp ON r.report_id = rp.id
+    WHERE ${DELIVERABILITY_CATEGORIES.nonconforme}
+    GROUP BY ${SOURCE_EXPR}, r.header_from
+    HAVING total > 0
+    ORDER BY total DESC
+  `);
+
+  const newAlerts = [];
+  for (const row of rows) {
+    const msg = `Nouvelle source non conforme détectée : ${row.source} (domaine ${row.header_from})`;
+    const exists = get("SELECT id FROM alerts WHERE type = 'nonconforming_source' AND message = ?", [msg]);
+    if (!exists) {
+      run(
+        "INSERT INTO alerts (type, severity, message, details) VALUES (?, ?, ?, ?)",
+        ['nonconforming_source', 'high', msg, JSON.stringify(row)]
+      );
+      newAlerts.push(msg);
+    }
+  }
   return newAlerts;
 }
 
@@ -286,6 +316,69 @@ export function generateRecommendations() {
       detail: 'La politique "reject" est la plus sécurisée. Les emails non authentifiés sont rejetés par le serveur destinataire.',
       action: 'v=DMARC1; p=reject; sp=reject; pct=100; rua=mailto:dmarc@votre-domaine.fr',
     });
+  }
+
+  recs.push(...detectDkimSelectorIssues());
+
+  return recs;
+}
+
+// Analyse les sélecteurs DKIM (partie "s=" de la signature, ex: selector1._domainkey.exemple.fr) :
+// - sélecteurs en échec récurrent sur les 30 derniers jours (clé DNS absente/incorrecte)
+// - sélecteurs qui validaient des emails il y a 30-60 jours mais ont disparu des rapports
+//   récents (rotation en cours ou mal terminée)
+export function detectDkimSelectorIssues() {
+  const recs = [];
+  const now = Math.floor(Date.now() / 1000);
+  const recentSince = now - 30 * 86400;
+  const priorSince = now - 60 * 86400;
+
+  const recent = all(`
+    SELECT dk.domain, dk.selector,
+      COALESCE(SUM(CASE WHEN dk.result = 'pass' THEN r.count ELSE 0 END), 0) as pass_total,
+      COALESCE(SUM(CASE WHEN dk.result != 'pass' THEN r.count ELSE 0 END), 0) as fail_total
+    FROM dkim_results dk
+    JOIN records r ON dk.record_id = r.id
+    JOIN reports rp ON r.report_id = rp.id
+    WHERE dk.selector IS NOT NULL AND dk.selector != '' AND rp.begin_ts >= ?
+    GROUP BY dk.domain, dk.selector
+  `, [recentSince]);
+
+  for (const s of recent) {
+    const total = s.pass_total + s.fail_total;
+    if (total < 5) continue;
+    const failRatio = s.fail_total / total;
+    if (failRatio >= 0.5) {
+      recs.push({
+        priority: failRatio >= 0.9 ? 'high' : 'medium',
+        category: 'DKIM',
+        title: `Sélecteur DKIM "${s.selector}" en échec récurrent pour ${s.domain}`,
+        detail: `${s.fail_total} emails sur ${total} échouent la validation DKIM avec le sélecteur "${s.selector}" (${Math.round(failRatio * 100)}% d'échec sur les 30 derniers jours).`,
+        action: `Vérifiez que l'enregistrement DNS ${s.selector}._domainkey.${s.domain} publie bien la clé publique correspondant à la clé privée utilisée pour signer. Si la clé a été régénérée, une rotation est probablement nécessaire.`,
+      });
+    }
+  }
+
+  const priorSelectors = all(`
+    SELECT DISTINCT dk.domain, dk.selector
+    FROM dkim_results dk
+    JOIN records r ON dk.record_id = r.id
+    JOIN reports rp ON r.report_id = rp.id
+    WHERE dk.selector IS NOT NULL AND dk.selector != '' AND dk.result = 'pass'
+      AND rp.begin_ts >= ? AND rp.begin_ts < ?
+  `, [priorSince, recentSince]);
+
+  const recentSelectorSet = new Set(recent.map(s => `${s.domain}::${s.selector}`));
+  for (const p of priorSelectors) {
+    if (!recentSelectorSet.has(`${p.domain}::${p.selector}`)) {
+      recs.push({
+        priority: 'low',
+        category: 'DKIM',
+        title: `Sélecteur DKIM "${p.selector}" disparu pour ${p.domain}`,
+        detail: `Le sélecteur "${p.selector}" validait des emails de ${p.domain} il y a 30 à 60 jours mais n'apparaît plus dans les rapports récents. Cela peut être une rotation normale, ou un souci de configuration si ce n'est pas planifié.`,
+        action: `Confirmez que la rotation du sélecteur DKIM "${p.selector}" pour ${p.domain} est intentionnelle, et que le nouveau sélecteur est bien publié en DNS et utilisé pour signer.`,
+      });
+    }
   }
 
   return recs;

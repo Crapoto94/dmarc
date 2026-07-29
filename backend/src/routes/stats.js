@@ -9,7 +9,7 @@ import {
   getDeliverabilityByDomain, getDeliverabilitySources, getDeliverabilitySourceRecords,
 } from '../services/analyzer.js';
 import { lookupIP } from '../services/ipinfo.js';
-import { lookupRBL } from '../services/rbl.js';
+import { lookupRBL, getRBLHistory } from '../services/rbl.js';
 
 const router = Router();
 
@@ -130,6 +130,12 @@ router.post('/rbl-check', async (req, res) => {
   const map = {};
   for (const r of results) map[r.ip] = r;
   res.json(map);
+});
+
+router.get('/rbl-history', (req, res) => {
+  const { ip, limit = 20 } = req.query;
+  if (!ip) return res.status(400).json({ error: 'ip required' });
+  res.json(getRBLHistory(ip, parseInt(limit) || 20));
 });
 
 export default router;

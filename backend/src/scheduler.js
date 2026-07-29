@@ -3,6 +3,7 @@ import { get, run } from './db.js';
 import { fetchReportsFromGmail } from './imap.js';
 import { generateAlerts } from './services/analyzer.js';
 import { sendBatchAlertEmail } from './services/notifier.js';
+import { sweepRecentIPs, recordRBLAlerts } from './services/rbl.js';
 
 export function startScheduler() {
   const schedule = get("SELECT value FROM config WHERE key = 'cron_schedule'");
@@ -41,6 +42,29 @@ export function startScheduler() {
       run(
         "INSERT INTO import_log (source, filename, report_id, status, message) VALUES (?, ?, ?, ?, ?)",
         ['scheduler', '', '', 'error', `Erreur cron : ${err.message}`]
+      );
+    }
+  });
+
+  // Balayage RBL quotidien : les IPs sources actives des 7 derniers jours sont revérifiées
+  // (le cache de 24h dans lookupRBL évite de re-solliciter les DNSBL publiques plus d'une
+  // fois par jour et par IP). Une alerte est créée pour toute IP qui vient d'apparaître
+  // sur liste noire depuis le dernier contrôle.
+  cron.schedule('30 3 * * *', async () => {
+    console.log('\n[*] Balayage RBL quotidien');
+    try {
+      const newlyListed = await sweepRecentIPs({ days: 7 });
+      const alertMsgs = recordRBLAlerts(newlyListed);
+      if (alertMsgs.length > 0) await sendBatchAlertEmail();
+      run(
+        "INSERT INTO import_log (source, filename, report_id, status, message) VALUES (?, ?, ?, ?, ?)",
+        ['rbl_sweep', '', '', 'success', `Balayage RBL : ${alertMsgs.length} nouvelle(s) IP blacklistée(s)`]
+      );
+    } catch (err) {
+      console.error(`  [!!] Erreur balayage RBL: ${err.message}`);
+      run(
+        "INSERT INTO import_log (source, filename, report_id, status, message) VALUES (?, ?, ?, ?, ?)",
+        ['rbl_sweep', '', '', 'error', `Erreur balayage RBL : ${err.message}`]
       );
     }
   });

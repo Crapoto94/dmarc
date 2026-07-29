@@ -60,6 +60,7 @@ export const api = {
   },
   checkRBL: (ip) => fetchJSON(`/stats/rbl-check?ip=${encodeURIComponent(ip)}`),
   checkRBLBulk: (ips) => fetchJSON('/stats/rbl-check', { method: 'POST', body: JSON.stringify({ ips }) }),
+  getRBLHistory: (ip, limit = 20) => fetchJSON(`/stats/rbl-history?ip=${encodeURIComponent(ip)}&limit=${limit}`),
 
   getReports: (filters = {}) => {
     const params = new URLSearchParams();

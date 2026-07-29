@@ -31,18 +31,78 @@ function useRBLStatuses(ips) {
   return map;
 }
 
+function mxToolboxUrl(ip) {
+  return `https://mxtoolbox.com/SuperTool.aspx?action=blacklist%3a${encodeURIComponent(ip)}&run=toolpage`;
+}
+
+function RBLHistory({ ip }) {
+  const [history, setHistory] = useState(null);
+  const [open, setOpen] = useState(false);
+
+  const onToggle = (e) => {
+    const isOpen = e.target.open;
+    setOpen(isOpen);
+    if (isOpen && !history) {
+      api.getRBLHistory(ip).then(setHistory).catch(() => setHistory([]));
+    }
+  };
+
+  return (
+    <details onToggle={onToggle} style={{ display: 'inline-block' }}>
+      <summary style={{ fontSize: '0.68rem', color: '#0f3460', cursor: 'pointer', listStyle: 'none' }}>
+        historique
+      </summary>
+      {open && (
+        <div style={{
+          fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: 4,
+          maxHeight: 120, overflowY: 'auto', minWidth: 180,
+        }}>
+          {!history ? 'Chargement…' : history.length === 0 ? 'Aucun historique' : (
+            <ul style={{ margin: 0, paddingLeft: 14 }}>
+              {history.map((h, i) => (
+                <li key={i} style={{ color: h.listed ? '#c0392b' : '#27ae60' }}>
+                  {new Date(h.checked_at).toLocaleString()} — {h.listed ? `Listée (${h.lists.join(', ')})` : 'Propre'}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </details>
+  );
+}
+
 function RBLBadge({ ip, statuses }) {
   if (!ip) return <span style={{ color: 'var(--text-secondary)' }}>—</span>;
   const status = statuses[ip];
   if (!status) return <span style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>en attente…</span>;
   if (status.listed) {
     return (
-      <span title={status.lists.join(', ')} style={{ color: '#c0392b', fontWeight: 700, fontSize: '0.72rem' }}>
-        🚫 Listée ({status.lists.length})
+      <span title={status.lists.join(', ')} style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ color: '#c0392b', fontWeight: 700, fontSize: '0.72rem' }}>
+            🚫 Listée ({status.lists.length})
+          </span>
+          <a
+            href={mxToolboxUrl(ip)}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontSize: '0.68rem', color: '#0f3460', textDecoration: 'underline' }}
+            onClick={e => e.stopPropagation()}
+          >
+            détails ↗
+          </a>
+        </span>
+        <RBLHistory ip={ip} />
       </span>
     );
   }
-  return <span style={{ color: '#27ae60', fontWeight: 600, fontSize: '0.72rem' }}>✅ Propre</span>;
+  return (
+    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+      <span style={{ color: '#27ae60', fontWeight: 600, fontSize: '0.72rem' }}>✅ Propre</span>
+      <RBLHistory ip={ip} />
+    </span>
+  );
 }
 
 export default function Deliverability() {

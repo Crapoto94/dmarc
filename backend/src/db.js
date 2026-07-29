@@ -127,13 +127,15 @@ export async function initDB() {
     )
   `);
   db.run(`
-    CREATE TABLE IF NOT EXISTS rbl_cache (
-      ip TEXT PRIMARY KEY,
+    CREATE TABLE IF NOT EXISTS rbl_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ip TEXT NOT NULL,
       listed INTEGER DEFAULT 0,
       lists TEXT,
       checked_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  db.run('CREATE INDEX IF NOT EXISTS idx_rbl_history_ip ON rbl_history(ip)');
   db.run(`
     CREATE TABLE IF NOT EXISTS import_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
