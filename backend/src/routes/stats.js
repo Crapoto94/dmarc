@@ -9,6 +9,7 @@ import {
   getDeliverabilityByDomain, getDeliverabilitySources, getDeliverabilitySourceRecords,
 } from '../services/analyzer.js';
 import { lookupIP } from '../services/ipinfo.js';
+import { lookupRBL } from '../services/rbl.js';
 
 const router = Router();
 
@@ -110,6 +111,25 @@ router.get('/ip-lookup', async (req, res) => {
   if (!ip) return res.status(400).json({ error: 'ip required' });
   const info = await lookupIP(ip);
   res.json(info);
+});
+
+router.get('/rbl-check', async (req, res) => {
+  const { ip } = req.query;
+  if (!ip) return res.status(400).json({ error: 'ip required' });
+  const result = await lookupRBL(ip);
+  res.json(result);
+});
+
+router.post('/rbl-check', async (req, res) => {
+  const { ips } = req.body;
+  if (!Array.isArray(ips) || ips.length === 0) {
+    return res.status(400).json({ error: 'ips (array) required' });
+  }
+  const unique = [...new Set(ips)].slice(0, 100);
+  const results = await Promise.all(unique.map(ip => lookupRBL(ip)));
+  const map = {};
+  for (const r of results) map[r.ip] = r;
+  res.json(map);
 });
 
 export default router;

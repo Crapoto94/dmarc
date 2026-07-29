@@ -120,6 +120,14 @@ export async function initDB() {
     )
   `);
   db.run(`
+    CREATE TABLE IF NOT EXISTS rbl_cache (
+      ip TEXT PRIMARY KEY,
+      listed INTEGER DEFAULT 0,
+      lists TEXT,
+      checked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.run(`
     CREATE TABLE IF NOT EXISTS import_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       source TEXT,

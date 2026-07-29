@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api.js';
 import DeliverabilityTimelineChart from '../components/Charts/DeliverabilityTimelineChart.jsx';
 
@@ -11,6 +11,38 @@ const CATEGORIES = [
 
 function fmtDate(ts) {
   return ts ? new Date(ts * 1000).toLocaleDateString() : '—';
+}
+
+// Vérifie les IPs sur plusieurs listes noires publiques (Spamhaus, Barracuda, SpamCop, SORBS)
+// via /stats/rbl-check ; résultats mis en cache côté backend (24h) et ici en mémoire pour la session.
+function useRBLStatuses(ips) {
+  const [map, setMap] = useState({});
+  const fetchedRef = useRef(new Set());
+  const key = ips.join(',');
+
+  useEffect(() => {
+    const toFetch = ips.filter(ip => ip && !fetchedRef.current.has(ip));
+    if (toFetch.length === 0) return;
+    toFetch.forEach(ip => fetchedRef.current.add(ip));
+    api.checkRBLBulk(toFetch).then(res => setMap(m => ({ ...m, ...res }))).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return map;
+}
+
+function RBLBadge({ ip, statuses }) {
+  if (!ip) return <span style={{ color: 'var(--text-secondary)' }}>—</span>;
+  const status = statuses[ip];
+  if (!status) return <span style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>en attente…</span>;
+  if (status.listed) {
+    return (
+      <span title={status.lists.join(', ')} style={{ color: '#c0392b', fontWeight: 700, fontSize: '0.72rem' }}>
+        🚫 Listée ({status.lists.length})
+      </span>
+    );
+  }
+  return <span style={{ color: '#27ae60', fontWeight: 600, fontSize: '0.72rem' }}>✅ Propre</span>;
 }
 
 export default function Deliverability() {
@@ -60,6 +92,8 @@ function ByDomain({ domains }) {
   useEffect(() => { setPage(1); }, [domain, category, search]);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / pageSize)) : 1;
+  const visibleIPs = [...new Set((data?.records || []).map(r => r.source_ip).filter(Boolean))];
+  const rblStatuses = useRBLStatuses(visibleIPs);
 
   return (
     <div>
@@ -117,6 +151,7 @@ function ByDomain({ domains }) {
                 <th style={s.th}>DKIM</th>
                 <th style={s.th}>SPF</th>
                 <th style={s.th}>IP Source</th>
+                <th style={s.th}>IP blacklistée</th>
                 <th style={s.th}>Org / Pays IP</th>
                 <th style={s.th}>DKIM domaine/sélecteur</th>
                 <th style={s.th}>SPF domaine</th>
@@ -133,6 +168,7 @@ function ByDomain({ domains }) {
                   <td style={{ ...s.td, color: rec.dkim_eval === 'pass' ? '#27ae60' : '#c0392b', fontWeight: 600 }}>{rec.dkim_eval}</td>
                   <td style={{ ...s.td, color: rec.spf_eval === 'pass' ? '#27ae60' : '#c0392b', fontWeight: 600 }}>{rec.spf_eval}</td>
                   <td style={s.td}>{rec.source_ip}</td>
+                  <td style={s.td}><RBLBadge ip={rec.source_ip} statuses={rblStatuses} /></td>
                   <td style={{ ...s.td, fontSize: '0.75rem' }} title={rec.ip_org || ''}>
                     {(rec.ip_org || rec.ip_isp || '—')} {rec.ip_country ? `(${rec.ip_country})` : ''}
                   </td>
@@ -145,7 +181,7 @@ function ByDomain({ domains }) {
                 </tr>
               ))}
               {!loading && (data?.records || []).length === 0 && (
-                <tr><td style={s.td} colSpan={11}>Aucune donnée pour ce filtre</td></tr>
+                <tr><td style={s.td} colSpan={12}>Aucune donnée pour ce filtre</td></tr>
               )}
             </tbody>
           </table>
@@ -208,6 +244,9 @@ function BySource({ domains }) {
     } catch { setDrill(null); }
     setDrillLoading(false);
   };
+
+  const drillIPs = [...new Set((drill?.records || []).map(r => r.source_ip).filter(Boolean))];
+  const rblStatuses = useRBLStatuses(drillIPs);
 
   const exportCSV = () => {
     const header = ['Source', 'Volume', 'DMARC OK', 'DMARC KO', 'DMARC %', 'SPF OK', 'DKIM OK'];
@@ -297,6 +336,7 @@ function BySource({ domains }) {
                                   <th style={s.th}>Rapporteur</th>
                                   <th style={s.th}>Header From</th>
                                   <th style={s.th}>IP Source</th>
+                                  <th style={s.th}>IP blacklistée</th>
                                   <th style={s.th}>Org IP</th>
                                   <th style={s.th}>Volume</th>
                                   <th style={s.th}>DKIM</th>
@@ -311,6 +351,7 @@ function BySource({ domains }) {
                                     <td style={s.td}>{r.org_name}</td>
                                     <td style={s.td}>{r.header_from}</td>
                                     <td style={s.td}>{r.source_ip}</td>
+                                    <td style={s.td}><RBLBadge ip={r.source_ip} statuses={rblStatuses} /></td>
                                     <td style={s.td}>{r.ip_org || '—'}</td>
                                     <td style={s.td}>{r.count}</td>
                                     <td style={{ ...s.td, color: r.dkim_eval === 'pass' ? '#27ae60' : '#c0392b' }}>{r.dkim_eval}</td>
@@ -319,7 +360,7 @@ function BySource({ domains }) {
                                   </tr>
                                 ))}
                                 {(drill?.records || []).length === 0 && (
-                                  <tr><td style={s.td} colSpan={9}>Aucun enregistrement</td></tr>
+                                  <tr><td style={s.td} colSpan={10}>Aucun enregistrement</td></tr>
                                 )}
                               </tbody>
                             </table>

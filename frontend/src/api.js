@@ -58,6 +58,8 @@ export const api = {
     const params = new URLSearchParams({ source, domain, subdomain, from, to, page, pageSize });
     return fetchJSON(`/stats/deliverability/sources/records?${params.toString()}`);
   },
+  checkRBL: (ip) => fetchJSON(`/stats/rbl-check?ip=${encodeURIComponent(ip)}`),
+  checkRBLBulk: (ips) => fetchJSON('/stats/rbl-check', { method: 'POST', body: JSON.stringify({ ips }) }),
 
   getReports: (filters = {}) => {
     const params = new URLSearchParams();
