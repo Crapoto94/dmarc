@@ -140,10 +140,11 @@ export async function initDB() {
 
   const userCount = db.exec("SELECT COUNT(*) as c FROM users");
   const urow = userCount.length > 0 ? userCount[0].values[0] : [0];
-  if (urow[0] === 0) {
+  const adminExists = get("SELECT id FROM users WHERE username = 'admin'");
+  if (urow[0] === 0 || !adminExists) {
     const bcrypt = await import('bcryptjs');
     const hash = bcrypt.hashSync('admin', 10);
-    db.run("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", ['admin', hash, 'admin']);
+    run("INSERT OR REPLACE INTO users (username, password, role) VALUES (?, ?, ?)", ['admin', hash, 'admin']);
     console.log('  [*] Utilisateur admin créé par défaut (admin/admin)');
   }
 
@@ -156,6 +157,7 @@ let inTransaction = false;
 
 export function saveDB() {
   if (db && !inTransaction) {
+    if (dbPath === ':memory:') return;
     const data = db.export();
     const dir = dirname(dbPath);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -231,4 +233,12 @@ export function transaction(fn) {
   }
 }
 
-export default { initDB, all, get, run, exec, transaction, saveDB };
+export function closeDB() {
+  if (db) {
+    saveDB();
+    db.close();
+    db = null;
+  }
+}
+
+export default { initDB, all, get, run, exec, transaction, saveDB, closeDB };

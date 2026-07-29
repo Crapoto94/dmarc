@@ -7,10 +7,6 @@ describe('Database', () => {
     await initDB();
   });
 
-  afterAll(() => {
-    closeDB();
-  });
-
   it('should create tables', () => {
     const tables = all("SELECT name FROM sqlite_master WHERE type='table'");
     const names = tables.map(t => t.name);
@@ -28,11 +24,11 @@ describe('Database', () => {
   });
 
   it('should insert and retrieve reports', () => {
-    run('INSERT INTO domains (name) VALUES (?)', ['example.com']);
-    const d = get('SELECT id FROM domains WHERE name = ?', ['example.com']);
+    run('INSERT INTO domains (domain) VALUES (?)', ['example.com']);
+    const d = get('SELECT id FROM domains WHERE domain = ?', ['example.com']);
     run(
-      'INSERT INTO reports (domain_id, org_name, email, report_id, begin_ts, end_ts, policy_domain, policy_adkim, policy_aspf, policy_p, policy_sp, policy_pct) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-      [d.id, 'google.com', 'noreply@google.com', 'r1', 1000000, 1001000, 'example.com', 'r', 's', 'reject', 'reject', 100]
+      'INSERT INTO reports (domain_id, org_name, email, report_id, begin_ts, end_ts, policy, sp_policy, pct) VALUES (?,?,?,?,?,?,?,?,?)',
+      [d.id, 'google.com', 'noreply@google.com', 'r1', 1000000, 1001000, 'reject', 'reject', 100]
     );
     const report = get('SELECT * FROM reports WHERE report_id = ?', ['r1']);
     expect(report.org_name).toBe('google.com');
@@ -46,6 +42,11 @@ describe('Database', () => {
 });
 
 describe('Parser', () => {
+  beforeAll(async () => {
+    process.env.DB_PATH = ':memory:';
+    await initDB();
+  });
+
   it('should parse a simple DMARC XML', async () => {
     const { importReportToDB } = await import('../src/parser.js');
     const xml = `<?xml version="1.0"?>
@@ -88,8 +89,8 @@ describe('Parser', () => {
 </feedback>`;
     const { writeFileSync, mkdirSync, existsSync } = await import('fs');
     const { join } = await import('path');
-    const tmpDir = join(import.meta.dirname, '..', 'tmp-test');
-    if (!existsSync(tmpDir)) mkdirSync(tmpDir);
+    const tmpDir = join(process.cwd(), 'tmp-test');
+    if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
     const fPath = join(tmpDir, 'test-report.xml');
     writeFileSync(fPath, xml);
     const id = await importReportToDB(fPath, 'test-report.xml');
