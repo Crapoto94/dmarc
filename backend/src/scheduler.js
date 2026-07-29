@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { get, all } from './db.js';
+import { get, run } from './db.js';
 import { fetchReportsFromGmail } from './imap.js';
 import { generateAlerts } from './services/analyzer.js';
 import { sendBatchAlertEmail } from './services/notifier.js';
@@ -10,11 +10,13 @@ export function startScheduler() {
   console.log(`  [*] Planificateur démarré (${expr})`);
 
   cron.schedule(expr, async () => {
-    console.log(`\n[*] Moissonnage Gmail automatique à ${new Date().toLocaleString()}`);
+    const ts = new Date().toISOString();
+    console.log(`\n[*] Moissonnage Gmail automatique à ${ts}`);
     try {
       const user = get("SELECT value FROM config WHERE key = 'gmail_user'");
       const pass = get("SELECT value FROM config WHERE key = 'gmail_pass'");
 
+      let imported = 0;
       if (user?.value && pass?.value) {
         const config = {
           gmail_user: user.value,
@@ -23,13 +25,23 @@ export function startScheduler() {
           gmail_search: get("SELECT value FROM config WHERE key = 'gmail_search'")?.value,
           gmail_senders: get("SELECT value FROM config WHERE key = 'gmail_senders'")?.value,
         };
-        await fetchReportsFromGmail(null, config);
+        const result = await fetchReportsFromGmail(null, config);
+        imported = result.length;
       }
 
-      await generateAlerts();
+      const newAlerts = generateAlerts();
       await sendBatchAlertEmail();
+
+      run(
+        "INSERT INTO import_log (source, filename, report_id, status, message) VALUES (?, ?, ?, ?, ?)",
+        ['scheduler', '', '', 'success', `Cron exécuté : ${imported} rapport(s), ${newAlerts.length} alerte(s)`]
+      );
     } catch (err) {
       console.error(`  [!!] Erreur scheduler: ${err.message}`);
+      run(
+        "INSERT INTO import_log (source, filename, report_id, status, message) VALUES (?, ?, ?, ?, ?)",
+        ['scheduler', '', '', 'error', `Erreur cron : ${err.message}`]
+      );
     }
   });
 }
