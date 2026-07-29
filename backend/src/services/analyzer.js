@@ -139,8 +139,7 @@ export function getTopSources(limit = 20) {
 export function getUnauthorizedActivity() {
   return all(`
     SELECT r.source_ip, r.count, r.header_from, r.dkim_eval, r.spf_eval,
-      r.envelope_from, r.disposition, rp.org_name, COALESCE(d.domain, '?') as report_domain,
-      r.dkim_results, r.spf_results
+      r.envelope_from, r.disposition, rp.org_name, COALESCE(d.domain, '?') as report_domain
     FROM records r
     JOIN reports rp ON r.report_id = rp.id
     LEFT JOIN domains d ON rp.domain_id = d.id
