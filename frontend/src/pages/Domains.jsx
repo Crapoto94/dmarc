@@ -33,9 +33,13 @@ export default function Domains() {
 
   const removeDomain = async (id) => {
     if (!confirm('Supprimer ce domaine et tous ses rapports ?')) return;
-    await api.deleteDomain(id);
-    if (selected === id) { setSelected(null); setDetail(null); }
-    loadDomains();
+    try {
+      await api.deleteDomain(id);
+      if (selected === id) { setSelected(null); setDetail(null); }
+      loadDomains();
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   if (loading) return <div style={s.loading}>Chargement...</div>;

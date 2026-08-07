@@ -45,7 +45,7 @@ export async function initDB() {
       begin_ts INTEGER,
       end_ts INTEGER,
       imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (domain_id) REFERENCES domains(id)
+      FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
     )
   `);
   db.exec(`

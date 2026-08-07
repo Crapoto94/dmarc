@@ -46,16 +46,16 @@ export const api = {
   getOverview: () => fetchJSON('/stats/overview'),
   lookupIP: (ip) => fetchJSON(`/stats/ip-lookup?ip=${encodeURIComponent(ip)}`),
 
-  getDeliverabilityByDomain: ({ domain = '', category = 'perfect', page = 1, pageSize = 10, search = '' } = {}) => {
-    const params = new URLSearchParams({ domain, category, page, pageSize, search });
+  getDeliverabilityByDomain: ({ domain = '', category = 'perfect', page = 1, pageSize = 10, search = '', sortBy = '', sortDir = 'desc' } = {}) => {
+    const params = new URLSearchParams({ domain, category, page, pageSize, search, sortBy, sortDir });
     return fetchJSON(`/stats/deliverability/domain?${params.toString()}`);
   },
   getDeliverabilitySources: ({ domain = '', subdomain = '', from = '', to = '' } = {}) => {
     const params = new URLSearchParams({ domain, subdomain, from, to });
     return fetchJSON(`/stats/deliverability/sources?${params.toString()}`);
   },
-  getDeliverabilitySourceRecords: ({ source, domain = '', subdomain = '', from = '', to = '', page = 1, pageSize = 20 }) => {
-    const params = new URLSearchParams({ source, domain, subdomain, from, to, page, pageSize });
+  getDeliverabilitySourceRecords: ({ source, domain = '', subdomain = '', from = '', to = '', page = 1, pageSize = 20, sortBy = '', sortDir = 'desc' }) => {
+    const params = new URLSearchParams({ source, domain, subdomain, from, to, page, pageSize, sortBy, sortDir });
     return fetchJSON(`/stats/deliverability/sources/records?${params.toString()}`);
   },
   checkRBL: (ip) => fetchJSON(`/stats/rbl-check?ip=${encodeURIComponent(ip)}`),

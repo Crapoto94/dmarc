@@ -77,11 +77,12 @@ router.get('/overview', (req, res) => {
 });
 
 router.get('/deliverability/domain', (req, res) => {
-  const { domain = '', category = 'perfect', page = 1, pageSize = 10, search = '' } = req.query;
+  const { domain = '', category = 'perfect', page = 1, pageSize = 10, search = '', sortBy = '', sortDir = 'desc' } = req.query;
   res.json(getDeliverabilityByDomain({
     domain, category, search,
     page: parseInt(page) || 1,
     pageSize: parseInt(pageSize) || 10,
+    sortBy, sortDir,
   }));
 });
 
@@ -95,7 +96,7 @@ router.get('/deliverability/sources', (req, res) => {
 });
 
 router.get('/deliverability/sources/records', (req, res) => {
-  const { source, domain = '', subdomain = '', from, to, page = 1, pageSize = 20 } = req.query;
+  const { source, domain = '', subdomain = '', from, to, page = 1, pageSize = 20, sortBy = '', sortDir = 'desc' } = req.query;
   if (!source) return res.status(400).json({ error: 'source required' });
   res.json(getDeliverabilitySourceRecords({
     source, domain, subdomain,
@@ -103,6 +104,7 @@ router.get('/deliverability/sources/records', (req, res) => {
     to: to ? Math.floor(new Date(to).getTime() / 1000) : undefined,
     page: parseInt(page) || 1,
     pageSize: parseInt(pageSize) || 20,
+    sortBy, sortDir,
   }));
 });
 

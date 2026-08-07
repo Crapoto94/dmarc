@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import { all, get, run } from '../db.js';
 import { getDomainDetail } from '../services/analyzer.js';
+import { existsSync, unlinkSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const reportsDir = join(__dirname, '..', 'reports');
 
 const router = Router();
 
@@ -35,8 +41,36 @@ router.post('/', (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
-  run('DELETE FROM domains WHERE id = ?', [req.params.id]);
-  res.json({ success: true });
+  try {
+    const domain = get('SELECT * FROM domains WHERE id = ?', [req.params.id]);
+    if (!domain) return res.status(404).json({ error: 'Domain not found' });
+
+    const reportFiles = all(
+      'SELECT filename FROM reports WHERE domain_id = ? AND filename IS NOT NULL AND filename != ""',
+      [req.params.id]
+    );
+
+    let deletedFiles = 0;
+    for (const rf of reportFiles) {
+      const fp = join(reportsDir, rf.filename);
+      try {
+        if (existsSync(fp)) {
+          unlinkSync(fp);
+          deletedFiles++;
+        }
+      } catch (err) {
+        console.error(`  [!!] Impossible de supprimer ${rf.filename}: ${err.message}`);
+      }
+    }
+
+    run('DELETE FROM reports WHERE domain_id = ?', [req.params.id]);
+    run('DELETE FROM domains WHERE id = ?', [req.params.id]);
+
+    res.json({ success: true, deleted_reports: reportFiles.length, deleted_files: deletedFiles });
+  } catch (err) {
+    console.error(`  [!!] Erreur suppression domaine ${req.params.id}: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;

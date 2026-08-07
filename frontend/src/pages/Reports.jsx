@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
+import { downloadCSV } from '../lib/csv.js';
+import RecordDetailModal from '../components/RecordDetailModal.jsx';
 
 const PAGE_SIZE = 15;
 
@@ -15,6 +17,34 @@ export default function Reports() {
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
   const [page, setPage] = useState(0);
+  const [detailRec, setDetailRec] = useState(null);
+
+  const exportList = () => {
+    const rows = filtered.map(r => [
+      r.id, r.org_name || '', r.domain_name || r.domain || '',
+      new Date(r.begin_ts * 1000).toLocaleDateString(), new Date(r.end_ts * 1000).toLocaleDateString(),
+      r.policy || '', r.total_emails ?? 0, r.record_count ?? 0, r.filename || '',
+    ]);
+    downloadCSV('rapports-dmarc.csv', [
+      ['ID', 'Rapporteur', 'Domaine', 'Début', 'Fin', 'Politique', 'Emails', 'Enregistrements', 'Fichier'],
+      ...rows,
+    ]);
+  };
+
+  const exportDetail = () => {
+    const records = detail?.records || [];
+    const rows = records.map(rec => [
+      new Date(detail.begin_ts * 1000).toLocaleDateString(), detail.org_name || '',
+      rec.source_ip || '', rec.ip_org || rec.ip_isp || '', rec.ip_asn || '', rec.ip_country || '',
+      rec.count ?? 0, rec.header_from || '', rec.dkim_eval || '', rec.spf_eval || '', rec.disposition || '',
+      (rec.dkim_results || []).map(d => `${d.domain}/${d.selector}=${d.result}`).join(', '),
+      (rec.spf_results || []).map(s => `${s.domain}=${s.result}`).join(', '),
+    ]);
+    downloadCSV(`rapport-${detail.id}-${detail.org_name || ''}.csv`, [
+      ['Date', 'Rapporteur', 'IP Source', 'Titulaire', 'ASN', 'Pays', 'Volume', 'Header From', 'DKIM', 'SPF', 'Disposition', 'DKIM détail', 'SPF détail'],
+      ...rows,
+    ]);
+  };
 
   const loadReports = () => {
     setLoading(true);
@@ -74,6 +104,9 @@ export default function Reports() {
           <button style={s.btn} onClick={scanFolder} disabled={scanning}>
             {scanning ? 'Scan...' : '📁'}
           </button>
+          <button style={s.btn} onClick={exportList} disabled={filtered.length === 0} title="Exporter la liste des rapports">
+            Exporter liste
+          </button>
         </div>
       </div>
 
@@ -109,7 +142,12 @@ export default function Reports() {
         <div style={s.detailPanel}>
           {detail ? (
             <div>
-              <h2 style={s.detailTitle}>{detail.org_name}</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h2 style={s.detailTitle}>{detail.org_name}</h2>
+                <button style={s.btn} onClick={exportDetail} disabled={!detail.records?.length} title="Exporter les enregistrements du rapport">
+                  Exporter (.csv)
+                </button>
+              </div>
               <div style={s.metaGrid}>
                 <Meta label="Domaine" value={detail.domain_name || detail.domain} />
                 <Meta label="Politique" value={`p=${detail.policy} sp=${detail.sp_policy} pct=${detail.pct}%`} />
@@ -131,7 +169,12 @@ export default function Reports() {
                   </thead>
                   <tbody>
                     {detail.records?.map((rec, i) => (
-                      <tr key={i} style={{ background: i % 2 === 0 ? 'var(--card-bg)' : 'var(--bg)' }}>
+                      <tr
+                        key={i}
+                        style={{ background: i % 2 === 0 ? 'var(--card-bg)' : 'var(--bg)', cursor: 'pointer' }}
+                        onClick={() => setDetailRec(rec)}
+                        title="Voir le détail d'analyse"
+                      >
                         <td style={s.td}>{rec.source_ip}</td>
                         <td style={{ ...s.td, fontSize: '0.75rem', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={rec.ip_org || ''}>
                           {rec.ip_org || rec.ip_isp || '...'}
@@ -167,6 +210,10 @@ export default function Reports() {
           )}
         </div>
       </div>
+
+      {detailRec && (
+        <RecordDetailModal record={detailRec} onClose={() => setDetailRec(null)} />
+      )}
     </div>
   );
 }

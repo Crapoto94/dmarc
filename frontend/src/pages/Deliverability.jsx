@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api.js';
 import DeliverabilityTimelineChart from '../components/Charts/DeliverabilityTimelineChart.jsx';
+import SortableTh from '../components/SortableTh.jsx';
+import RecordDetailModal from '../components/RecordDetailModal.jsx';
 
 const CATEGORIES = [
   { key: 'perfect', label: 'Conformité parfaite', color: '#27ae60' },
@@ -40,6 +42,7 @@ function RBLHistory({ ip }) {
   const [open, setOpen] = useState(false);
 
   const onToggle = (e) => {
+    e.stopPropagation();
     const isOpen = e.target.open;
     setOpen(isOpen);
     if (isOpen && !history) {
@@ -139,17 +142,26 @@ function ByDomain({ domains }) {
   const [pageSize] = useState(10);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState('date');
+  const [sortDir, setSortDir] = useState('desc');
+  const [detailRec, setDetailRec] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
-    api.getDeliverabilityByDomain({ domain, category, page, pageSize, search })
+    api.getDeliverabilityByDomain({ domain, category, page, pageSize, search, sortBy, sortDir })
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [domain, category, page, pageSize, search]);
+  }, [domain, category, page, pageSize, search, sortBy, sortDir]);
 
   useEffect(load, [load]);
   useEffect(() => { setPage(1); }, [domain, category, search]);
+
+  const toggleSort = (field) => {
+    if (sortBy === field) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortBy(field); setSortDir('desc'); }
+    setPage(1);
+  };
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / pageSize)) : 1;
   const visibleIPs = [...new Set((data?.records || []).map(r => r.source_ip).filter(Boolean))];
@@ -203,23 +215,28 @@ function ByDomain({ domains }) {
           <table style={s.table}>
             <thead>
               <tr>
-                <th style={s.th}>Date</th>
-                <th style={s.th}>Rapporteur</th>
-                <th style={s.th}>Header From</th>
-                <th style={s.th}>Volume</th>
-                <th style={s.th}>Action</th>
-                <th style={s.th}>DKIM</th>
-                <th style={s.th}>SPF</th>
-                <th style={s.th}>IP Source</th>
-                <th style={s.th}>IP blacklistée</th>
-                <th style={s.th}>Org / Pays IP</th>
+                <SortableTh label="Date" field="date" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} style={s.th} />
+                <SortableTh label="Rapporteur" field="rapporteur" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} style={s.th} />
+                <SortableTh label="Header From" field="header_from" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} style={s.th} />
+                <SortableTh label="Volume" field="volume" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} style={s.th} />
+                <SortableTh label="Action" field="action" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} style={s.th} />
+                <SortableTh label="DKIM" field="dkim" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} style={s.th} />
+                <SortableTh label="SPF" field="spf" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} style={s.th} />
+                <SortableTh label="IP Source" field="source_ip" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} style={s.th} />
+                <SortableTh label="IP blacklistée" field="ip_blacklisted" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} style={s.th} />
+                <SortableTh label="Org / Pays IP" field="org_ip" sortBy={sortBy} sortDir={sortDir} onSort={toggleSort} style={s.th} />
                 <th style={s.th}>DKIM domaine/sélecteur</th>
                 <th style={s.th}>SPF domaine</th>
               </tr>
             </thead>
             <tbody>
               {(data?.records || []).map((rec, i) => (
-                <tr key={rec.id} style={{ background: i % 2 === 0 ? 'var(--card-bg)' : 'var(--bg)' }}>
+                <tr
+                  key={rec.id}
+                  style={{ background: i % 2 === 0 ? 'var(--card-bg)' : 'var(--bg)', cursor: 'pointer' }}
+                  onClick={() => setDetailRec(rec)}
+                  title="Voir le détail d'analyse"
+                >
                   <td style={s.td}>{fmtDate(rec.begin_ts)}</td>
                   <td style={s.td}>{rec.org_name}</td>
                   <td style={s.td}>{rec.header_from}</td>
@@ -254,6 +271,14 @@ function ByDomain({ domains }) {
           </div>
         )}
       </div>
+
+      {detailRec && (
+        <RecordDetailModal
+          record={detailRec}
+          rblStatus={rblStatuses[detailRec.source_ip]}
+          onClose={() => setDetailRec(null)}
+        />
+      )}
     </div>
   );
 }
@@ -300,6 +325,9 @@ function BySource({ domains }) {
   const [expanded, setExpanded] = useState(null);
   const [drill, setDrill] = useState(null);
   const [drillLoading, setDrillLoading] = useState(false);
+  const [drillSortBy, setDrillSortBy] = useState('date');
+  const [drillSortDir, setDrillSortDir] = useState('desc');
+  const [detailRec, setDetailRec] = useState(null);
   const [compare, setCompare] = useState(false);
   const [prevSources, setPrevSources] = useState([]);
 
@@ -332,16 +360,29 @@ function BySource({ domains }) {
     setRange({ from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) });
   };
 
-  const toggleExpand = async (source) => {
-    if (expanded === source) { setExpanded(null); setDrill(null); return; }
-    setExpanded(source);
-    setDrillLoading(true);
-    try {
-      const d = await api.getDeliverabilitySourceRecords({ source, domain, subdomain, from: range.from, to: range.to, pageSize: 50 });
-      setDrill(d);
-    } catch { setDrill(null); }
-    setDrillLoading(false);
+  const toggleExpand = (source) => {
+    if (expanded === source) { setExpanded(null); setDrill(null); }
+    else setExpanded(source);
   };
+
+  const toggleDrillSort = (field) => {
+    if (drillSortBy === field) setDrillSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    else { setDrillSortBy(field); setDrillSortDir('desc'); }
+  };
+
+  useEffect(() => {
+    if (!expanded) return;
+    let cancelled = false;
+    setDrillLoading(true);
+    api.getDeliverabilitySourceRecords({
+      source: expanded, domain, subdomain, from: range.from, to: range.to,
+      pageSize: 50, sortBy: drillSortBy, sortDir: drillSortDir,
+    })
+      .then(d => { if (!cancelled) setDrill(d); })
+      .catch(() => { if (!cancelled) setDrill(null); })
+      .finally(() => { if (!cancelled) setDrillLoading(false); });
+    return () => { cancelled = true; };
+  }, [drillSortBy, drillSortDir, domain, subdomain, range.from, range.to, expanded]);
 
   const drillIPs = [...new Set((drill?.records || []).map(r => r.source_ip).filter(Boolean))];
   const rblStatuses = useRBLStatuses(drillIPs);
@@ -446,21 +487,26 @@ function BySource({ domains }) {
                             <table style={s.table}>
                               <thead>
                                 <tr>
-                                  <th style={s.th}>Date</th>
-                                  <th style={s.th}>Rapporteur</th>
-                                  <th style={s.th}>Header From</th>
-                                  <th style={s.th}>IP Source</th>
-                                  <th style={s.th}>IP blacklistée</th>
-                                  <th style={s.th}>Org IP</th>
-                                  <th style={s.th}>Volume</th>
-                                  <th style={s.th}>DKIM</th>
-                                  <th style={s.th}>SPF</th>
-                                  <th style={s.th}>Action</th>
+                                  <SortableTh label="Date" field="date" sortBy={drillSortBy} sortDir={drillSortDir} onSort={toggleDrillSort} style={s.th} />
+                                  <SortableTh label="Rapporteur" field="rapporteur" sortBy={drillSortBy} sortDir={drillSortDir} onSort={toggleDrillSort} style={s.th} />
+                                  <SortableTh label="Header From" field="header_from" sortBy={drillSortBy} sortDir={drillSortDir} onSort={toggleDrillSort} style={s.th} />
+                                  <SortableTh label="IP Source" field="source_ip" sortBy={drillSortBy} sortDir={drillSortDir} onSort={toggleDrillSort} style={s.th} />
+                                  <SortableTh label="IP blacklistée" field="ip_blacklisted" sortBy={drillSortBy} sortDir={drillSortDir} onSort={toggleDrillSort} style={s.th} />
+                                  <SortableTh label="Org IP" field="org_ip" sortBy={drillSortBy} sortDir={drillSortDir} onSort={toggleDrillSort} style={s.th} />
+                                  <SortableTh label="Volume" field="volume" sortBy={drillSortBy} sortDir={drillSortDir} onSort={toggleDrillSort} style={s.th} />
+                                  <SortableTh label="DKIM" field="dkim" sortBy={drillSortBy} sortDir={drillSortDir} onSort={toggleDrillSort} style={s.th} />
+                                  <SortableTh label="SPF" field="spf" sortBy={drillSortBy} sortDir={drillSortDir} onSort={toggleDrillSort} style={s.th} />
+                                  <SortableTh label="Action" field="action" sortBy={drillSortBy} sortDir={drillSortDir} onSort={toggleDrillSort} style={s.th} />
                                 </tr>
                               </thead>
                               <tbody>
                                 {(drill?.records || []).map((r, j) => (
-                                  <tr key={j}>
+                                  <tr
+                                    key={j}
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={() => setDetailRec(r)}
+                                    title="Voir le détail d'analyse"
+                                  >
                                     <td style={s.td}>{fmtDate(r.begin_ts)}</td>
                                     <td style={s.td}>{r.org_name}</td>
                                     <td style={s.td}>{r.header_from}</td>
@@ -498,6 +544,14 @@ function BySource({ domains }) {
           </table>
         </div>
       </div>
+
+      {detailRec && (
+        <RecordDetailModal
+          record={detailRec}
+          rblStatus={rblStatuses[detailRec.source_ip]}
+          onClose={() => setDetailRec(null)}
+        />
+      )}
     </div>
   );
 }

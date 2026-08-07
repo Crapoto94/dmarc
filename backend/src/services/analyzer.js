@@ -466,7 +466,31 @@ const DELIVERABILITY_CATEGORIES = {
   nonconforme: "r.dkim_eval!='pass' AND r.spf_eval!='pass'",
 };
 
-export function getDeliverabilityByDomain({ domain = '', category = 'perfect', page = 1, pageSize = 10, search = '' } = {}) {
+// Colonnes triables des tableaux de délivrabilité (par domaine et détail par source).
+const DELIVERABILITY_SORT = {
+  date: 'rp.begin_ts',
+  rapporteur: 'rp.org_name',
+  header_from: 'r.header_from',
+  source_ip: 'r.source_ip',
+  ip_blacklisted: 'ip_blacklisted',
+  org_ip: 'ic.org',
+  volume: 'r.count',
+  dkim: 'r.dkim_eval',
+  spf: 'r.spf_eval',
+  action: 'r.disposition',
+};
+
+// `ip_blacklisted` reflète l'état du dernier contrôle RBL enregistré pour l'IP.
+const IP_BLACKLISTED_EXPR = `(SELECT listed FROM rbl_history WHERE ip = r.source_ip ORDER BY id DESC LIMIT 1)`;
+
+export function buildDeliverabilitySort(sortBy, sortDir) {
+  const col = DELIVERABILITY_SORT[sortBy];
+  if (!col) return 'rp.begin_ts DESC';
+  const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
+  return `${col} ${dir}, r.id ${dir}`;
+}
+
+export function getDeliverabilityByDomain({ domain = '', category = 'perfect', page = 1, pageSize = 10, search = '', sortBy = '', sortDir = 'desc' } = {}) {
   const baseParams = [];
   let baseWhere = '1=1';
   if (domain) {
@@ -508,13 +532,14 @@ export function getDeliverabilityByDomain({ domain = '', category = 'perfect', p
   const records = all(`
     SELECT r.id, r.source_ip, r.count, r.disposition, r.dkim_eval, r.spf_eval, r.header_from, r.envelope_from,
       rp.org_name, rp.begin_ts, rp.policy,
-      ic.org as ip_org, ic.country as ip_country, ic.isp as ip_isp, ic.asn as ip_asn
+      ic.org as ip_org, ic.country as ip_country, ic.isp as ip_isp, ic.asn as ip_asn,
+      ${IP_BLACKLISTED_EXPR} as ip_blacklisted
     FROM records r
     JOIN reports rp ON r.report_id = rp.id
     LEFT JOIN domains d ON rp.domain_id = d.id
     LEFT JOIN ip_cache ic ON ic.ip = r.source_ip
     WHERE ${baseWhere} AND ${activeCond}
-    ORDER BY rp.begin_ts DESC
+    ORDER BY ${buildDeliverabilitySort(sortBy, sortDir)}
     LIMIT ? OFFSET ?
   `, [...baseParams, pageSize, offset]);
 
@@ -570,7 +595,7 @@ export function getDeliverabilitySources({ domain = '', subdomain = '', from, to
   }));
 }
 
-export function getDeliverabilitySourceRecords({ source, domain = '', subdomain = '', from, to, page = 1, pageSize = 20 } = {}) {
+export function getDeliverabilitySourceRecords({ source, domain = '', subdomain = '', from, to, page = 1, pageSize = 20, sortBy = '', sortDir = 'desc' } = {}) {
   const params = [];
   let where = '1=1';
   if (domain) { where += ' AND d.domain = ?'; params.push(domain); }
@@ -589,17 +614,23 @@ export function getDeliverabilitySourceRecords({ source, domain = '', subdomain 
 
   const offset = (Math.max(page, 1) - 1) * pageSize;
   const records = all(`
-    SELECT r.source_ip, r.count, r.disposition, r.dkim_eval, r.spf_eval, r.header_from, r.envelope_from,
+    SELECT r.id, r.source_ip, r.count, r.disposition, r.dkim_eval, r.spf_eval, r.header_from, r.envelope_from,
       rp.org_name, rp.begin_ts,
-      ic.org as ip_org, ic.country as ip_country
+      ic.org as ip_org, ic.country as ip_country,
+      ${IP_BLACKLISTED_EXPR} as ip_blacklisted
     FROM records r
     JOIN reports rp ON r.report_id = rp.id
     LEFT JOIN domains d ON rp.domain_id = d.id
     LEFT JOIN ip_cache ic ON ic.ip = r.source_ip
     WHERE ${where}
-    ORDER BY rp.begin_ts DESC
+    ORDER BY ${buildDeliverabilitySort(sortBy, sortDir)}
     LIMIT ? OFFSET ?
   `, [...params, pageSize, offset]);
+
+  for (const rec of records) {
+    rec.dkim_results = all('SELECT domain, selector, result FROM dkim_results WHERE record_id = ?', [rec.id]);
+    rec.spf_results = all('SELECT domain, scope, result FROM spf_results WHERE record_id = ?', [rec.id]);
+  }
 
   return { records, total: totalRow.c, page, pageSize };
 }
