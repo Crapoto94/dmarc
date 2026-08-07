@@ -46,7 +46,7 @@ router.delete('/:id', (req, res) => {
     if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
     const reportFiles = all(
-      'SELECT filename FROM reports WHERE domain_id = ? AND filename IS NOT NULL AND filename != ""',
+      "SELECT filename FROM reports WHERE domain_id = ? AND filename IS NOT NULL AND filename != ''",
       [req.params.id]
     );
 

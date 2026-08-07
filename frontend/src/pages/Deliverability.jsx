@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import DeliverabilityTimelineChart from '../components/Charts/DeliverabilityTimelineChart.jsx';
 import SortableTh from '../components/SortableTh.jsx';
 import RecordDetailModal from '../components/RecordDetailModal.jsx';
+import { SpfCell } from '../components/AuthCells.jsx';
 
 const CATEGORIES = [
   { key: 'perfect', label: 'Conformité parfaite', color: '#27ae60' },
@@ -243,7 +244,7 @@ function ByDomain({ domains }) {
                   <td style={s.td}>{rec.count}</td>
                   <td style={s.td}>{rec.disposition}</td>
                   <td style={{ ...s.td, color: rec.dkim_eval === 'pass' ? '#27ae60' : '#c0392b', fontWeight: 600 }}>{rec.dkim_eval}</td>
-                  <td style={{ ...s.td, color: rec.spf_eval === 'pass' ? '#27ae60' : '#c0392b', fontWeight: 600 }}>{rec.spf_eval}</td>
+                  <td style={s.td}><SpfCell record={rec} /></td>
                   <td style={s.td}>{rec.source_ip}</td>
                   <td style={s.td}><RBLBadge ip={rec.source_ip} statuses={rblStatuses} /></td>
                   <td style={{ ...s.td, fontSize: '0.75rem' }} title={rec.ip_org || ''}>
@@ -515,7 +516,7 @@ function BySource({ domains }) {
                                     <td style={s.td}>{r.ip_org || '—'}</td>
                                     <td style={s.td}>{r.count}</td>
                                     <td style={{ ...s.td, color: r.dkim_eval === 'pass' ? '#27ae60' : '#c0392b' }}>{r.dkim_eval}</td>
-                                    <td style={{ ...s.td, color: r.spf_eval === 'pass' ? '#27ae60' : '#c0392b' }}>{r.spf_eval}</td>
+                                    <td style={s.td}><SpfCell record={r} /></td>
                                     <td style={s.td}>{r.disposition}</td>
                                   </tr>
                                 ))}

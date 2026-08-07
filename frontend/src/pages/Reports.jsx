@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import { downloadCSV } from '../lib/csv.js';
 import RecordDetailModal from '../components/RecordDetailModal.jsx';
+import { SpfCell } from '../components/AuthCells.jsx';
 
 const PAGE_SIZE = 15;
 
@@ -186,7 +187,7 @@ export default function Reports() {
                           {rec.header_from}
                         </td>
                         <td style={{ ...s.td, color: rec.dkim_eval === 'pass' ? '#27ae60' : '#c0392b' }}>{rec.dkim_eval}</td>
-                        <td style={{ ...s.td, color: rec.spf_eval === 'pass' ? '#27ae60' : '#c0392b' }}>{rec.spf_eval}</td>
+                        <td style={s.td}><SpfCell record={rec} /></td>
                         <td style={s.td}>{rec.disposition}</td>
                       </tr>
                     ))}
